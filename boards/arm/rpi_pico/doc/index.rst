@@ -6,11 +6,12 @@ Raspberry Pi Pico
 Overview
 ********
 
-The Raspberry Pi Pico is a small, low-cost, versatile board from
-Raspberry Pi. It is equipped with an RP2040 SoC, an on-board LED,
-a USB connector, and an SWD interface. The USB bootloader allows it
-to be flashed without any adapter, in a drag-and-drop manner.
-It is also possible to flash and debug the Pico with its SWD interface,
+The Raspberry Pi Pico and Pico W are small, low-cost, versatile boards from
+Raspberry Pi. They are equipped with an RP2040 SoC, an on-board LED,
+a USB connector, and an SWD interface. The Pico W additionally conatains an
+Infineon CYW43439 2.4 GHz Wi-Fi/Bluetoth module. The USB bootloader allows the
+ability to flash without any adapter, in a drag-and-drop manner.
+It is also possible to flash and debug the boards with their SWD interface,
 using an external adapter.
 
 Hardware
@@ -28,6 +29,7 @@ Hardware
 - 8 Programmable I/O (PIO) for custom peripherals
 - On-board LED
 - 1 Watchdog timer peripheral
+- Infineon CYW43439 2.4 GHz Wi-Fi chip (Pico W only)
 
 
 .. figure:: img/rpi_pico.jpg
@@ -85,12 +87,21 @@ hardware features:
      - :kconfig:option:`CONFIG_SERIAL`
      - :dtcompatible:`raspberrypi,pico-uart-pio`
 
+The rpi_pico_w board configuration will additionally support WiFi and
+Bluetooth hardware features (when drivers become available):
+
 Pin Mapping
 ===========
 
 The peripherals of the RP2040 SoC can be routed to various pins on the board.
 The configuration of these routes can be modified through DTS. Please refer to
 the datasheet to see the possible routings for each peripheral.
+
+External pin mapping on the Pico W is identical to the Pico, but note that internal
+RP2040 GPIO lines 23, 24, 25, and 29 are routed to the Infineon module on the W.
+Since GPIO 25 is rounted to the on-board LED on the Pico, but to the Infineon module
+on the Pico W, the "blinky" sample program does not work on the W (use hello_world for
+a simple test program instead).
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
