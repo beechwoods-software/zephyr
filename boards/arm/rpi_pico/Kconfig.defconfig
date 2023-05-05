@@ -5,7 +5,7 @@ if BOARD_RPI_PICO || BOARD_RPI_PICO_W
 
 config BOARD
 	default "rpi_pico" if BOARD_RPI_PICO
-	default "rpi_pico_w" if BOARD_RPI_PICO_W	
+	default "rpi_pico_w" if BOARD_RPI_PICO_W
 
 config RP2_FLASH_W25Q080
 	default y

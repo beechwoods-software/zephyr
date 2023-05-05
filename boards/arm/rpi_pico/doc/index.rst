@@ -38,6 +38,12 @@ Hardware
 
      Raspberry Pi Pico (Image courtesy of Raspberry Pi)
 
+.. figure:: img/rpi_pico_w.jpg
+     :align: center
+     :alt: Raspberry Pi Pico W
+
+     Raspberry Pi Pico W
+     
 Supported Features
 ==================
 
