@@ -7,3 +7,58 @@
 /dts-v1/;
 
 #include "rpi_pico-common.dtsi"
+
+&spi0 {
+	status = "okay";
+
+	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+
+	pico_w_cyw43_0: iwin@0 {
+		status = "okay";
+		compatible = "pico_w_cyw43";
+		spi-max-frequency = <2000000>;
+		reg = <0>;
+
+		data-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
+		clock-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		power-gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+/*
+&pinctrl {
+	pio1_spi0_default: pio1_spi0_default {
+		group1 {
+			pinmux = <PIO1_P13>, <PIO1_P14>, <PIO1_P15>;
+		};
+		group2 {
+			pinmux = <PIO1_P12>;
+			input-enable;
+		};
+	};
+
+};
+
+&pio1 {
+ 	status = "okay";
+
+	pio1_spi0: pio1_spi0 {
+		pinctrl-0 = <&pio1_spi0_default>;
+		pinctrl-names = "default";
+
+		compatible = "raspberrypi,pico-spi-pio";
+		status = "okay";
+	};
+};
+
+&pio1_spi0 {
+	status = "okay";
+    	pinctrl-0 = <&pio1_spi0_default>;
+    	pico_w_cyw43_0@0 {
+		status = "okay"; 
+        	compatible = "pico_w_cyw43";
+        	reg = <0>;
+        	spi-max-frequency = <1000000>; // conservatively set to 1MHz 
+    	};
+};
+*/

@@ -1,0 +1,42 @@
+# Raspberry Pi Pico W WiFi driver options
+
+# Copyright (c) 2023 Beechwoods Software
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig WIFI_RPIPICOWCYW43
+	bool "Raspberry Pi Pico W Wifi support"
+	default y
+	select NET_L2_WIFI_MGMT
+	select WIFI_OFFLOAD
+	select NET_OFFLOAD
+	select NET_SOCKETS
+	imply NET_SOCKETS_OFFLOAD
+	select GPIO
+
+#if WIFI_RPIPICOWCYW43
+config WIFI_RPIPICOWCYW43_SHELL
+	bool "CYW43 shell"
+	depends on SHELL
+	help
+	  Enable CYW43 shell
+
+#
+#choice WIFI_RPIPICOWCYW43_BUS
+#	bool "Select BUS interface"
+#	default WIFI_ESWIFI_BUS_PIO_SPI
+#
+#config WIFI_RPIPICOWCYW43_BUS_PIO_SPI
+#	bool "SPI Bus interface"
+#	select SPI
+#
+#endchoice
+#
+#config WIFI_RPIPICOWCYW43_THREAD_PRIO
+#	int "RPIPICOWCYW43 threads priority"
+#	default 2
+#	help
+#	  This option sets the priority of the CYW43 threads.
+#	  Do not touch it unless you know what you are doing.
+#
+
+#endif
