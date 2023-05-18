@@ -126,6 +126,9 @@ Changes in this release
     option from ``KSCAN_SDL`` to :kconfig:option:`CONFIG_INPUT_SDL_TOUCH` and the
     compatible from ``zephyr,sdl-kscan`` to
     :dtcompatible:`zephyr,input-sdl-touch`.
+  * ``nuvoton,npcx-kscan`` moved to :ref:`input`, renamed the Kconfig option
+    names from ``KSCAN_NPCX_...`` to ``INPUT_NPCX_KBD...`` and the compatible
+    from ``nuvoton,npcx-kscan`` to :dtcompatible:`nuvoton,npcx-kbd`.
   * Touchscreen drivers converted to use the input APIs can use the
     :dtcompatible:`zephyr,kscan-input` driver to maintain Kscan compatilibity.
 
@@ -147,6 +150,14 @@ Changes in this release
   * :c:func:`net_if_ipv4_maddr_leave`
   * :c:func:`net_if_ipv6_maddr_join`
   * :c:func:`net_if_ipv6_maddr_leave`
+
+* MCUmgr transports now need to set up the struct before registering it by
+  setting the function pointers to the function handlers, these have been
+  moved to a ``functions`` struct object of type
+  :c:struct:`smp_transport_api_t`. Because of these changes, the legacy
+  transport registration function and object are no longer available. The
+  registration function now returns a value which is 0 for success or a
+  negative error code if an error occurred.
 
 Removed APIs in this release
 ============================
@@ -533,6 +544,13 @@ Libraries / Subsystems
     correctly, allowing other transports or other parts of the application
     code to use it.
 
+  * A new version of the SMP protocol used by MCUmgr has been introduced in the
+    header, which is used to indicate the version of the protocol being used.
+    This updated protocol allows returning much more detailed error responses
+    per group, see the
+    :ref:`MCUmgr SMP protocol specification <mcumgr_smp_protocol_specification>`
+    for details.
+
 * Retention
 
   * Retention subsystem has been added which adds enhanced features over
@@ -556,6 +574,11 @@ HALs
 
 MCUboot
 *******
+
+* Relocated the MCUboot Kconfig options from the main ``Kconfig.zephyr`` file to
+  a new ``modules/Kconfig.mcuboot`` module-specific file. This means that, for
+  interactive Kconfig interfaces, the MCUboot options will now be located under
+  ``Modules`` instead of under ``Boot Options``.
 
 * Added :kconfig:option:`CONFIG_MCUBOOT_CMAKE_WEST_SIGN_PARAMS` that allows to pass arguments to
   west sign when invoked from cmake.
