@@ -8,7 +8,7 @@ Overview
 
 The Raspberry Pi Pico and Pico W are small, low-cost, versatile boards from
 Raspberry Pi. They are equipped with an RP2040 SoC, an on-board LED,
-a USB connector, and an SWD interface. The Pico W additionally conatains an
+a USB connector, and an SWD interface. The Pico W additionally contains an
 Infineon CYW43439 2.4 GHz Wi-Fi/Bluetoth module. The USB bootloader allows the
 ability to flash without any adapter, in a drag-and-drop manner.
 It is also possible to flash and debug the boards with their SWD interface,
@@ -36,14 +36,14 @@ Hardware
      :align: center
      :alt: Raspberry Pi Pico
 
-     Raspberry Pi Pico (Image courtesy of Raspberry Pi)
 
 .. figure:: img/rpi_pico_w.jpg
      :align: center
      :alt: Raspberry Pi Pico W
 
-     Raspberry Pi Pico W
-     
+     Raspberry Pi Pico (above) and Pico W (below)
+     (Images courtesy of Raspberry Pi)
+
 Supported Features
 ==================
 
@@ -93,9 +93,6 @@ hardware features:
      - :kconfig:option:`CONFIG_SERIAL`
      - :dtcompatible:`raspberrypi,pico-uart-pio`
 
-The rpi_pico_w board configuration will additionally support WiFi and
-Bluetooth hardware features (when drivers become available):
-
 Pin Mapping
 ===========
 
@@ -105,7 +102,7 @@ the datasheet to see the possible routings for each peripheral.
 
 External pin mapping on the Pico W is identical to the Pico, but note that internal
 RP2040 GPIO lines 23, 24, 25, and 29 are routed to the Infineon module on the W.
-Since GPIO 25 is rounted to the on-board LED on the Pico, but to the Infineon module
+Since GPIO 25 is routed to the on-board LED on the Pico, but to the Infineon module
 on the Pico W, the "blinky" sample program does not work on the W (use hello_world for
 a simple test program instead).
 
