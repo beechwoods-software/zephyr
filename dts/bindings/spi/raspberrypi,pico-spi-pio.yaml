@@ -8,8 +8,21 @@ compatible: "raspberrypi,pico-spi-pio"
 include: ["spi-controller.yaml", "raspberrypi,pico-pio-device.yaml", "reset-device.yaml"]
 
 properties:
-  reg:
+  clk-gpios:
+    type: phandle-array
     required: true
+    description: |
+      Output pin for SPI clock
+
+  mosi-gpios:
+    type: phandle-array
+    description: |
+      MOSI gpio info. Output pin for Master Out Slave In.
+
+  miso-gpios:
+    type: phandle-array
+    description: |
+      MISO gpio info. Input pin for Master In Slave Out.
 
   clocks:
     required: true
