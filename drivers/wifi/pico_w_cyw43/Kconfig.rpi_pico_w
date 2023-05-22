@@ -12,7 +12,11 @@ menuconfig WIFI_RPIPICOWCYW43
 	select NET_SOCKETS
 	imply NET_SOCKETS_OFFLOAD
 	select GPIO
-
+	select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
+	select PICOSDK_USE_DMA
+	select PICOSDK_USE_GPIO	
+	select PICOSDK_USE_PWM
+	
 #if WIFI_RPIPICOWCYW43
 config WIFI_RPIPICOWCYW43_SHELL
 	bool "CYW43 shell"

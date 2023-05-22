@@ -8,10 +8,14 @@
 #include <zephyr/net/net_pkt.h>
 
 #include "pico_w_cyw43_drv.h"
+#include "picowi/picowi_pio.h"
+#include "picowi/picowi_wifi.h"
+#include "picowi/picowi_init.h"
 
 #define DT_DRV_COMPAT pico_w_cyw43
 
 #include "pico_w_cyw43_log.h"
+
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
@@ -24,11 +28,27 @@ static struct pico_w_cyw43_dev pico_w_cyw43_0; /* static instance */
 
 static int pico_w_cyw43_init(const struct device *dev)
 {
+  int rv;
+  
   LOG_DBG("");
   
   pico_w_cyw43_shell_register(dev->data);
 
-  return 0;
+    
+  //pio_init();
+  //wifi_pio_init();
+  
+  if (!wifi_setup()) {
+    LOG_DBG("Error: SPI communication\n");
+  }
+  else if (!wifi_init()) {
+    LOG_DBG("Error: can't initialise WiFi\n");
+  }
+  else {
+    rv= 0;
+  }
+
+  return rv;
 }
 
 static void pico_w_cyw43_iface_init(struct net_if *iface)
