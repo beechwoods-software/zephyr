@@ -109,6 +109,6 @@ void io_out(int pin, int val);
 extern uint8_t io_in(int pin);
 uint32_t ustime(void);
 void usdelay(uint32_t usec);
-int ustimeout(uint32_t *tickp, int usec);
+//int ustimeout(uint32_t *tickp, int usec);
 
 // EOF

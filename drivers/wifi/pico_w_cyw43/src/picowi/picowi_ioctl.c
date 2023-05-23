@@ -122,6 +122,8 @@ int ioctl_cmd(int cmd, char *name, int namelen, int wait_msec, int wr, void *dat
         wait_msec -= IOCTL_POLL_MSEC;        
         usdelay(IOCTL_POLL_MSEC * 1000);
     }
+    // DMR - debug printf that should eventually be removed.
+    printf("Returning from ioctl_cmd \"%s\"\n", name);
     return(ret);
 }
 

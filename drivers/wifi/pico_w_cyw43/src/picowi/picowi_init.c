@@ -34,7 +34,9 @@
 
 // Build-time options; set non-zero to enable the option
 #define USE_WIFI_REGS       1       // Use WiFi register accesses to set LED
-#define DISPLAY_CLMVER      0       // Display CLM information
+
+// DMR - for now, let's display the version of Infineon firmware that's been loaded
+#define DISPLAY_CLMVER      1       // Display CLM information
 
 // Active Low Power (ALP) & High Throughput (HT) clock bits for CLOCK_CSR_REG
 #define SD_ALP_REQ          0x08

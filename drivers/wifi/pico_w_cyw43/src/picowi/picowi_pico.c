@@ -92,21 +92,49 @@ uint32_t ustime(void)
 }
 
 // Delay given number of microseconds
+
+static int mstimeout(uint32_t *tickp, int msec)
+{
+  //uint32_t t = time_us_32();
+
+    uint32_t t = k_uptime_get_32();
+    uint32_t dt=t - *tickp;
+
+    if (msec == 0 || dt >= msec)
+    {
+        *tickp = t;
+        return (1);
+    }
+ 
+    return (0);
+}
+
 void usdelay(uint32_t usec)
 {
-    uint32_t ticks;
-    if (usec)
+  printf("Entering usdelay(%d)\n", usec);
+
+// DMR - k_msleep should work here as far as I know, but it blocks forever somwhere pretty early on.
+#if 0
+  k_msleep(usec/1000);
+#else  
+  uint32_t ticks, msec;
+    msec = usec/1000;
+    if (msec)
     {
-        ustimeout(&ticks, 0);
-        while (!ustimeout(&ticks, usec)) ;
+        mstimeout(&ticks, 0);
+        while (!mstimeout(&ticks, msec)) ;
     }
+#endif    
+    printf("Leaving usdelay(%d)\n", usec);
 }
+
+
 
 // Return non-zero if timeout
 int ustimeout(uint32_t *tickp, int usec)
 {
   //uint32_t t = time_us_32();
-  /*
+ 
     uint32_t t = 1000 * k_uptime_get_32();
     uint32_t dt=t - *tickp;
 
@@ -115,8 +143,7 @@ int ustimeout(uint32_t *tickp, int usec)
         *tickp = t;
         return (1);
     }
-  */
-  k_usleep(usec);
+ 
     return (0);
 }
 
