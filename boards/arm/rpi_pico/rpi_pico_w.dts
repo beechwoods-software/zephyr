@@ -8,42 +8,24 @@
 
 #include "rpi_pico-common.dtsi"
 
-&spi0 {
-	status = "okay";
-
-	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
-
-	pico_w_cyw43_0: iwin@0 {
-		status = "okay";
-		compatible = "pico_w_cyw43";
-		spi-max-frequency = <2000000>;
-		reg = <0>;
-
-		data-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
-		clock-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
-		power-gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
-	};
-};
-
-/*
 &pinctrl {
-	pio1_spi0_default: pio1_spi0_default {
+	pio0_spi0_default: pio0_spi0_default {
 		group1 {
-			pinmux = <PIO1_P13>, <PIO1_P14>, <PIO1_P15>;
+			pinmux = <PIO0_P25>, <PIO0_P29>, <PIO0_P23>;
 		};
 		group2 {
-			pinmux = <PIO1_P12>;
+			pinmux = <PIO0_P24>;
 			input-enable;
 		};
 	};
 
 };
 
-&pio1 {
+&pio0 {
  	status = "okay";
 
-	pio1_spi0: pio1_spi0 {
-		pinctrl-0 = <&pio1_spi0_default>;
+	pio0_spi0: pio0_spi0 {
+		pinctrl-0 = <&pio0_spi0_default>;
 		pinctrl-names = "default";
 
 		compatible = "raspberrypi,pico-spi-pio";
@@ -51,14 +33,26 @@
 	};
 };
 
-&pio1_spi0 {
+&pio0_spi0 {
 	status = "okay";
-    	pinctrl-0 = <&pio1_spi0_default>;
-    	pico_w_cyw43_0@0 {
-		status = "okay"; 
-        	compatible = "pico_w_cyw43";
-        	reg = <0>;
-        	spi-max-frequency = <1000000>; // conservatively set to 1MHz 
-    	};
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clocks = < &peripheral_clk >;
+	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+	clk-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+	miso-gpios = <&gpio0 24 0>;
+	mosi-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
+	pinctrl-0 = <&pio0_spi0_default>;
+	pico_w_cyw43_0@0 {
+		compatible = "pico_w_cyw43";
+		reg = <0>;
+		spi-max-frequency = <4000000>; /* Setting at 4Mhz because that's what picowi had, but may decrease if there are probems */
+		wl-on = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+		cyw43_led0: cyw43_led0 {		/* Pico W LED is on CYW43439 GPIO 0 */
+		      compatible = "gpio-leds";
+		      gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+		      label = "LED";
+		};
+
+	};
 };
-*/
