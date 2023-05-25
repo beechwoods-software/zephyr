@@ -26,7 +26,9 @@
 #include <hardware/pio.h>
 #include <hardware/clocks.h>
 #include <hardware/structs/pio.h>
+#if USE_PIO_DMA
 #include <hardware/dma.h>
+#endif
 #include "picowi_defs.h"
 #include "picowi_pico.h"
 #include "picowi_init.h"
@@ -313,6 +315,7 @@ bool wifi_rx_event_wait(int msec, uint8_t evt)
 }
 
 // Initialise PIO DMA channels
+#if USE_PIO_DMA
 void wifi_pio_dma_init(void)
 {
     dma_channel_config cfg;
@@ -335,6 +338,7 @@ void wifi_pio_dma_init(void)
     channel_config_set_dreq(&cfg, wifi_rx_dma_dreq);
     dma_channel_configure(wifi_rx_dma_chan, &cfg, NULL, &wifi_pio->rxf[wifi_sm], 8, false);
 }
+#endif
 
 // Read data from SPI interface, using bit-bash
 int wifi_bb_spi_read(uint8_t *data, int nbits)

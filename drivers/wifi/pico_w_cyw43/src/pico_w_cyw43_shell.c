@@ -77,6 +77,22 @@ static int pico_w_cyw43_shell_reset(const struct shell *sh, size_t argc,
 
 }
 
+
+void print_task_info(const struct k_thread *thread, void *user_data)
+{
+  printf("Task Name: %s\n", k_thread_name_get(thread));
+    printf("Priority: %d\n", k_thread_priority_get(thread));
+    printf("\n");
+}
+
+void picw_w_cyw43_print_tasks(void)
+{
+    printf("Currently running tasks:\n");
+    k_thread_foreach(print_task_info, NULL);
+}
+
+
+
 SHELL_STATIC_SUBCMD_SET_CREATE(pico_w_cyw43_shell,
 	SHELL_CMD(led, NULL, "cyw43 led <on|off>", pico_w_cyw43_shell_led),
 	SHELL_CMD(reset, NULL, "cyw43 reset", pico_w_cyw43_shell_reset),

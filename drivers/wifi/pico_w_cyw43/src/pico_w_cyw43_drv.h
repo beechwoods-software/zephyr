@@ -102,3 +102,5 @@ void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev *dev);
 #else
 #define pico_w_cyw43_shell_register(dev)
 #endif
+
+void picw_w_cyw43_print_tasks(void);
