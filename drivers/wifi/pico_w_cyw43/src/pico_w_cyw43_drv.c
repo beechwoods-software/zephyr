@@ -61,9 +61,7 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 	    
             // Get any events
             if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
-	      printf("wifi_get_irq()\n");
 	      if (event_poll() < 0) {
-		printf("event_poll < 0()\n");
 		//printf("Total time %lu msec\n", ustime()/1000);
 		break;
 	      }
