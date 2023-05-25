@@ -225,24 +225,64 @@ static int pico_w_cyw43_mgmt_scan(const struct device *dev, scan_result_cb_t cb)
   return 0;
 }
 
+static int __pico_w_cyw43_dev_deconfig(struct pico_w_cyw43_dev *pico_w_cyw43,
+                                       struct wifi_connect_req_params *params)
+{
+    memcpy(pico_w_cyw43->sta.ssid, params->ssid, params->ssid_length);
+    pico_w_cyw43->sta.ssid[params->ssid_length] = '\0';
+
+    switch (params->security) {
+    case WIFI_SECURITY_TYPE_NONE:
+        pico_w_cyw43->sta.pass[0] = '\0';
+        pico_w_cyw43->sta.security = PICOWCYW43_SEC_OPEN;
+        break;
+    case WIFI_SECURITY_TYPE_PSK:
+        memcpy(pico_w_cyw43->sta.pass, params->psk, params->psk_length);
+        pico_w_cyw43->sta.pass[params->psk_length] = '\0';
+        pico_w_cyw43->sta.security = PICOWCYW43_SEC_WPA2_MIXED;
+        break;
+    default:
+        return -EINVAL;
+    }
+
+    if (params->channel == WIFI_CHANNEL_ANY) {
+        pico_w_cyw43->sta.channel = 0U;
+    } else {
+        pico_w_cyw43->sta.channel = params->channel;
+    }
+
+    return 0;
+}
+
 static int pico_w_cyw43_mgmt_connect(const struct device *dev,
 				     struct wifi_connect_req_params *params)
 {
+  struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
+  int err;
   LOG_DBG("");
-  printf("Calling mgmt_connect()\n");
+  pico_w_cyw43_lock(pico_w_cyw43);
+  err = __pico_w_cyw43_dev_deconfig(pico_w_cyw43, params);
+  if (!err) {
+    pico_w_cyw43->req = PICOWCYW43_REQ_CONNECT;
+    k_work_submit_to_queue(&pico_w_cyw43->work_q, &pico_w_cyw43->request_work);
+  }
+  pico_w_cyw43_unlock(pico_w_cyw43);
   return 0;
 }
 
 static int pico_w_cyw43_mgmt_disconnect(const struct device *dev)
 {
+  struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
   LOG_DBG("");
-  printf("Calling mgmt_disconnect()\n");
+  pico_w_cyw43->req = PICOWCYW43_REQ_DISCONNECT;
+  k_work_submit_to_queue(&pico_w_cyw43->work_q, &pico_w_cyw43->request_work);
   return 0;
 }
 
 static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
 				       struct wifi_connect_req_params *params)
 {
+  
   LOG_DBG("");
   printf("Calling mgmt_ap_enable()\n");
   return 0;
