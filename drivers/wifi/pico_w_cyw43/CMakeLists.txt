@@ -12,6 +12,7 @@ if(CONFIG_WIFI_RPIPICOWCYW43)
     src/picowi/picowi_pico.c
     src/picowi/picowi_ioctl.c
     src/picowi/picowi_event.c
+    src/picowi/picowi_scan.c
     src/picowi/fw_43439.c
   )
 

@@ -90,7 +90,7 @@ inline uint8_t io_in(int pin)
 
 // Delay given number of microseconds
 
-static int mstimeout(uint32_t *tickp, int msec)
+int mstimeout(uint32_t *tickp, int msec)
 {
   //uint32_t t = time_us_32();
 

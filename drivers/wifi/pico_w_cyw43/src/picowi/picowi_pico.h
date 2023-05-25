@@ -108,5 +108,6 @@ void io_slew(int pin, uint32_t slew);
 void io_out(int pin, int val);
 extern uint8_t io_in(int pin);
 void usdelay(uint32_t usec);
+int mstimeout(uint32_t *tickp, int usec);
 
 // EOF

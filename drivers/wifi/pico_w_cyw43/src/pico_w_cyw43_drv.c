@@ -8,10 +8,12 @@
 #include <zephyr/net/net_pkt.h>
 
 #include "pico_w_cyw43_drv.h"
+#include "picowi/picowi_defs.h"
 #include "picowi/picowi_pio.h"
 #include "picowi/picowi_wifi.h"
 #include "picowi/picowi_init.h"
 #include "picowi/picowi_pico.h"
+#include "picowi/picowi_scan.h"
 
 #define DT_DRV_COMPAT pico_w_cyw43
 
@@ -35,11 +37,41 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 	char *data;
 	int i, ret;
 
+	uint32_t led_ticks, poll_ticks;
+	bool ledon=false;
+
+	
 	LOG_DBG("");
 
 	pico_w_cyw43_lock(pico_w_cyw43);
 	LOG_DBG("Scanning for wifi networks.\n");
 	printf("Scanning for wifi networks.\n");
+
+	add_event_handler(scan_event_handler);
+	
+	if (!scan_start()) {
+	  printf("Error: can't start scan\n");
+	}
+	else {
+	  while (1) {
+	    // Toggle LED at 1 Hz
+	    if (mstimeout(&led_ticks, 50)) {
+	      wifi_set_led(ledon = !ledon);
+	    }
+	    
+            // Get any events
+            if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
+	      printf("wifi_get_irq()\n");
+	      if (event_poll() < 0) {
+		printf("event_poll < 0()\n");
+		//printf("Total time %lu msec\n", ustime()/1000);
+		break;
+	      }
+            }
+	  }
+	}
+
+
 #if 0
 	ret = eswifi_at_cmd_rsp(eswifi, cmd, &data);
 	if (ret < 0) {
