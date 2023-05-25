@@ -274,15 +274,17 @@ static int pico_w_cyw43_mgmt_disconnect(const struct device *dev)
 {
   struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
   LOG_DBG("");
+  pico_w_cyw43_lock(pico_w_cyw43);
   pico_w_cyw43->req = PICOWCYW43_REQ_DISCONNECT;
   k_work_submit_to_queue(&pico_w_cyw43->work_q, &pico_w_cyw43->request_work);
+  pico_w_cyw43_unlock(pico_w_cyw43);
   return 0;
 }
 
 static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
 				       struct wifi_connect_req_params *params)
 {
-  
+  struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
   LOG_DBG("");
   printf("Calling mgmt_ap_enable()\n");
   return 0;
