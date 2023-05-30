@@ -14,6 +14,8 @@
 #include "picowi/picowi_init.h"
 #include "picowi/picowi_pico.h"
 #include "picowi/picowi_scan.h"
+#include "picowi/picowi_join.h"
+
 
 #define DT_DRV_COMPAT pico_w_cyw43
 
@@ -103,15 +105,82 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 
 static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 {
+    uint32_t led_ticks, poll_ticks;
+    bool ledon=false;
+
+	printf("Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+	pico_w_cyw43_lock(pico_w_cyw43);
+    add_event_handler(join_event_handler);
+    printf("io_init()\n");
+    io_init();
+    usdelay(1000);
+    printf("join_start(%s, %s);\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+    if (!join_start(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass))
+        printf("Error: can't start network join\n");
+    else {
+        while (1) {
+            // Toggle LED at 1 Hz if joined, 5 Hz if not
+            if (mstimeout(&led_ticks, 50))
+                wifi_set_led(ledon = !ledon);
+
+            // Get any events, poll the joining state machine
+            if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
+                if (event_poll() < 0) break;
+                join_state_poll(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+                mstimeout(&poll_ticks, 0);
+            }
+        }
+    }
+	printf("Done Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+	pico_w_cyw43_unlock(pico_w_cyw43);
+}
+
+static int zpico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
+{
+    uint32_t led_ticks, poll_ticks;
+    bool ledon=false;
+
 	struct in_addr addr;
 	int err;
 
-	LOG_DBG("Connecting to %s (pass=%s)", pico_w_cyw43->sta.ssid,
-		pico_w_cyw43->sta.pass);
+	LOG_DBG("Connecting to %s (pass=%s)", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+	printf("Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 
 	pico_w_cyw43_lock(pico_w_cyw43);
 
-	LOG_DBG("Connected!");
+    printf("add_event_handler for join\n");
+    add_event_handler(join_event_handler);
+    printf("set_display_mode for join\n");
+    set_display_mode(DISP_INFO);
+    io_init();
+    usdelay(1000);
+    printf("PicoWi network scan\n");
+
+    if (!join_start(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass)) {
+        printf("Error: can't start network join\n");
+        printf("Failed to connect to %s\n", pico_w_cyw43->sta.ssid);
+        goto error;
+    }
+    printf("Connected \n");
+    // Additional diagnostic display
+    //set_display_mode(DISP_INFO|DISP_EVENT|DISP_SDPCM|DISP_REG|DISP_JOIN|DISP_DATA);
+    set_display_mode(DISP_INFO|DISP_EVENT|DISP_JOIN);
+    mstimeout(&led_ticks, 0);
+    mstimeout(&poll_ticks, 0);
+    while (1)
+    {
+        // Toggle LED at 1 Hz if joined, 5 Hz if not
+        if (mstimeout(&led_ticks, link_check() > 0 ? 500 : 100))
+            wifi_set_led(ledon = !ledon);
+
+        // Get any events, poll the joining state machine
+        if (wifi_get_irq() || mstimeout(&poll_ticks, 10))
+        {
+            event_poll();
+            join_state_poll(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+            mstimeout(&poll_ticks, 0);
+        }
+    }
 
 	pico_w_cyw43_unlock(pico_w_cyw43);
 	return 0;

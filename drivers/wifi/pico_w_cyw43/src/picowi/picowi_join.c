@@ -173,30 +173,33 @@ void join_state_poll(char *ssid, char *passwd)
         p = passwd;
     if (eip->join == JOIN_IDLE)
     {
+        printf("JOIN_IDLE\n");
         display(DISP_JOIN, "Joining network %s\n", s);
         eip->link = 0;
         eip->join = JOIN_JOINING;
-        ustimeout(&join_ticks, 0);
+        mstimeout(&join_ticks, 0);
         join_restart(s, p);
     }
     else if (eip->join == JOIN_JOINING)
     {
+        printf("JOIN_JOINING\n");
         if (link_check() > 0)
         {
             display(DISP_JOIN, "Joined network\n");
             eip->join = JOIN_OK;
         }
-        else if (link_check()<0 || ustimeout(&join_ticks, JOIN_TRY_USEC))
+        else if (link_check()<0 || mstimeout(&join_ticks, JOIN_TRY_USEC/1000))
         {
             display(DISP_JOIN, "Failed to join network\n");
-            ustimeout(&join_ticks, 0);
+            mstimeout(&join_ticks, 0);
             join_stop();
             eip->join = JOIN_FAIL;
         }
     }
     else if (eip->join == JOIN_OK)
     {
-        ustimeout(&join_ticks, 0);
+        printf("JOIN_OK\n");
+        mstimeout(&join_ticks, 0);
         if (link_check() < 1)
         {
             display(DISP_JOIN, "Leaving network\n");
@@ -206,7 +209,8 @@ void join_state_poll(char *ssid, char *passwd)
     }
     else  // JOIN_FAIL
     {
-        if (ustimeout(&join_ticks, JOIN_RETRY_USEC))
+        printf("JOIN_FAIL\n");
+        if (mstimeout(&join_ticks, JOIN_RETRY_USEC/1000))
             eip->join = JOIN_IDLE;
     }
 }

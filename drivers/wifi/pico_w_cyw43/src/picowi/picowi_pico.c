@@ -35,10 +35,12 @@
 // Initialise hardware
 void io_init(void)
 {
-  //stdio_init_all();
-    stdio_uart_init_full(uart0, 115200, -1, -1);
-  stdio_uart_init_full(uart1, 115200, 6, 7);
+  // stdio_init_all();
+  //  stdio_uart_init_full(uart0, 115200, -1, -1);
+  //stdio_uart_init_full(uart1, 115200, 6, 7);
+    printf("calling gpio_set_input_hysteresis_enabled(SD_DIN_PIN, true); \n");
     gpio_set_input_hysteresis_enabled(SD_DIN_PIN, true);
+    printf("Done calling gpio_set_input_hysteresis_enabled(SD_DIN_PIN, true); \n");
 }
 
 // Set input or output with pullups
