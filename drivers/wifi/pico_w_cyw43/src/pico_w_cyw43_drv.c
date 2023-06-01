@@ -147,10 +147,14 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
         while (1) {
             // Toggle LED at 1 Hz if joined, 5 Hz if not
             if (mstimeout(&led_ticks, 50))
+            {
+                // printf("wifi_set_led\n");
                 wifi_set_led(ledon = !ledon);
+            }
 
             // Get any events, poll the joining state machine
             if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
+                // printf("+++ EVENT \n");
                 if (event_poll() < 0) break;
                 join_state_poll(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
                 mstimeout(&poll_ticks, 0);
@@ -170,6 +174,7 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
 	LOG_DBG("Disconnecting from %s", pico_w_cyw43->sta.ssid);
 
 	pico_w_cyw43_lock(pico_w_cyw43);
+    join_stop();
 
 	LOG_DBG("Disconnected!");
 
