@@ -8,12 +8,16 @@
 #include <zephyr/net/net_pkt.h>
 
 #include "pico_w_cyw43_drv.h"
+#include "picowi/picowi_evtnum.h"
+#include "picowi/picowi_ioctl.h"
 #include "picowi/picowi_defs.h"
 #include "picowi/picowi_pio.h"
 #include "picowi/picowi_wifi.h"
 #include "picowi/picowi_init.h"
 #include "picowi/picowi_pico.h"
 #include "picowi/picowi_scan.h"
+#include "picowi/picowi_join.h"
+
 
 #define DT_DRV_COMPAT pico_w_cyw43
 
@@ -101,24 +105,64 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 	pico_w_cyw43_unlock(pico_w_cyw43);
 }
 
+// Handler for join events (link & auth changes)
+static int my_join_event_handler(EVENT_INFO *eip)
+{
+    if (eip->chan == SDPCM_CHAN_EVT)
+    {
+        printf(" + join_event_handler chan %u event_type ", eip->chan);
+        switch(eip->event_type) {
+            case WLC_E_ASSOC_REQ_IE: printf("WLC_E_ASSOC_REQ_IE\n"); break;
+            case WLC_E_AUTH: printf("WLC_E_AUTH\n"); break;
+            case WLC_E_ASSOC_RESP_IE: printf("WLC_E_ASSOC_RESP_IE\n"); break;
+            case WLC_E_ASSOC: printf("WLC_E_ASSOC\n"); break;
+            case WLC_E_LINK: printf("WLC_E_LINK -> status=%d LINK_UP_OK=%d\n", eip->status, eip->flags&1 ? 1 :0); break;
+            case WLC_E_PSK_SUP: printf("WLC_E_PSK_SUP LINK_AUTH_OK=%d\n", eip->status==6 ? 1 :0); break;
+            case WLC_E_SET_SSID: printf("WLC_E_SET_SSID\n"); break;
+            case WLC_E_JOIN: printf("WLC_E_JOIN\n"); break;
+            case WLC_E_DISASSOC_IND: printf("WLC_E_DISASSOC_IND\n"); break;
+            case WLC_E_REASSOC: printf("WLC_E_REASSOC\n"); break;
+            default: printf("%u\n", eip->event_type);
+        }
+    }
+    return 0;
+}
+
 static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 {
-	struct in_addr addr;
-	int err;
+    uint32_t led_ticks, poll_ticks;
+    bool ledon=false;
 
-	LOG_DBG("Connecting to %s (pass=%s)", pico_w_cyw43->sta.ssid,
-		pico_w_cyw43->sta.pass);
-
+	printf("Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_lock(pico_w_cyw43);
+    add_event_handler(my_join_event_handler);
+    add_event_handler(join_event_handler);
+    printf("io_init()\n");
+    io_init();
+    usdelay(1000);
+    printf("join_start(%s, %s);\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+    if (!join_start(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass))
+        printf("Error: can't start network join\n");
+    else {
+        while (1) {
+            // Toggle LED at 1 Hz if joined, 5 Hz if not
+            if (mstimeout(&led_ticks, 50))
+            {
+                // printf("wifi_set_led\n");
+                wifi_set_led(ledon = !ledon);
+            }
 
-	LOG_DBG("Connected!");
-
+            // Get any events, poll the joining state machine
+            if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
+                // printf("+++ EVENT \n");
+                if (event_poll() < 0) break;
+                join_state_poll(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+                mstimeout(&poll_ticks, 0);
+            }
+        }
+    }
+	printf("Done Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_unlock(pico_w_cyw43);
-	return 0;
-
-error:
-	pico_w_cyw43_unlock(pico_w_cyw43);
-	return -EIO;
 }
 
 static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
@@ -129,6 +173,7 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
 	LOG_DBG("Disconnecting from %s", pico_w_cyw43->sta.ssid);
 
 	pico_w_cyw43_lock(pico_w_cyw43);
+    join_stop();
 
 	LOG_DBG("Disconnected!");
 
