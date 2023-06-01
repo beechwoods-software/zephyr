@@ -141,9 +141,9 @@ int join_event_handler(EVENT_INFO *eip)
 {
     int ret = 1;
     uint16_t news;
+    
     if (eip->chan == SDPCM_CHAN_EVT)
     {
-        printf(" +++ join_event_handler chan %u event_type %u\n", eip->chan, eip->event_type);
         news = eip->link;
         if (eip->event_type==WLC_E_LINK && eip->status==0)
             news = eip->flags&1 ? news|LINK_UP_OK : news&~LINK_UP_OK;
@@ -160,14 +160,12 @@ int join_event_handler(EVENT_INFO *eip)
     return(ret);
 }
 
-static char lastJoinState[] = "                            ";
 // Poll the network joining state machine
 void join_state_poll(char *ssid, char *passwd)
 {
     EVENT_INFO *eip = &event_info;
     static uint32_t join_ticks;
     static char *s = "", *p = "";
-    char *currentState;
 
     if (ssid)
         s = ssid;
@@ -175,7 +173,6 @@ void join_state_poll(char *ssid, char *passwd)
         p = passwd;
     if (eip->join == JOIN_IDLE)
     {
-        currentState = "JOIN_IDLE";
         display(DISP_JOIN, "Joining network %s\n", s);
         eip->link = 0;
         eip->join = JOIN_JOINING;
@@ -184,7 +181,6 @@ void join_state_poll(char *ssid, char *passwd)
     }
     else if (eip->join == JOIN_JOINING)
     {
-        currentState = "JOIN_JOINING";
         if (link_check() > 0)
         {
             display(DISP_JOIN, "Joined network\n");
@@ -200,7 +196,6 @@ void join_state_poll(char *ssid, char *passwd)
     }
     else if (eip->join == JOIN_OK)
     {
-        currentState = "JOIN_OK";
         mstimeout(&join_ticks, 0);
         if (link_check() < 1)
         {
@@ -211,13 +206,8 @@ void join_state_poll(char *ssid, char *passwd)
     }
     else  // JOIN_FAIL
     {
-        currentState = "JOIN_FAIL";
         if (mstimeout(&join_ticks, JOIN_RETRY_USEC/1000))
             eip->join = JOIN_IDLE;
-    }
-    if (strcmp(lastJoinState, currentState) != 0) {
-        printf("Join State -> %s\n", currentState);
-        strcpy(lastJoinState, currentState);
     }
 }
 
