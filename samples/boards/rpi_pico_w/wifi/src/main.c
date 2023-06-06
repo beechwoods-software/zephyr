@@ -44,6 +44,25 @@ void wifi_connect(char *ssid, char * passwd) {
     printf("%d Finished calling net_mgmt(NET_REQUEST_WIFI_SCAN)\n", ret);
 }
 
+void wifi_enable_ap(char *ssid, char *passwd)
+{
+    int ret;
+    
+    struct net_if *iface = net_if_get_default();
+    printf("Default interface is %s\n", iface->if_dev->dev->name);
+    static struct wifi_connect_req_params req_params = {
+        .channel = 0,
+        .security = WIFI_SECURITY_TYPE_PSK,
+    };
+    req_params.ssid = ssid;
+    req_params.ssid_length = strlen(ssid);
+    req_params.psk = passwd;
+    req_params.psk_length = strlen(passwd);
+    printf("\n\ncalling net_mgmt(NET_REQUEST_WIFI_AP_ENABLE,)\n");
+    ret = net_mgmt(NET_REQUEST_WIFI_AP_ENABLE, iface, &req_params, sizeof(struct wifi_connect_req_params));
+    printf("%d Finished calling net_mgmt(NET_REQUEST_WIFI_AP_ENABLE,)\n", ret);
+}
+
 int main(void)
 {
 	/* NET_CONFIG_SETTINGS will init DHCP
@@ -51,6 +70,7 @@ int main(void)
 	 */
 
   // wifi_scan();
-  wifi_connect("cyrus", "6173470125");
+  // wifi_connect("cyrus", "6173470125");
+  wifi_enable_ap("pico_ap", "password");
   return 0;
 }

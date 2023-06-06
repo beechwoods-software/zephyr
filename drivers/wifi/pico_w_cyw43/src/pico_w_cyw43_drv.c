@@ -128,6 +128,11 @@ static int my_join_event_handler(EVENT_INFO *eip)
     return 0;
 }
 
+static int pico_w_cyw43_enable_ap_mode(struct pico_w_cyw43_dev *pico_w_cyw43)
+{
+    printf("pico_w_cyw43_enable_ap_mode: %s/%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
+    return 0;
+}
 static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 {
     uint32_t led_ticks, poll_ticks;
@@ -259,6 +264,11 @@ static void pico_w_cyw43_request_work(struct k_work *item)
 	case PICOWCYW43_REQ_SCAN:
 		pico_w_cyw43_scan(pico_w_cyw43);
 		break;
+	case PICOWCYW43_REQ_AP_ENABLE:
+		err = pico_w_cyw43_enable_ap_mode(pico_w_cyw43);
+		wifi_mgmt_raise_disconnect_result_event(pico_w_cyw43->iface, err);
+		break;
+
 	case PICOWCYW43_REQ_NONE:	
 	default:
 		break;
@@ -365,61 +375,14 @@ static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
 				       struct wifi_connect_req_params *params)
 {
   struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
-  struct net_if_ipv4 *ipv4 = pico_w_cyw43->iface->config.ip.ipv4;
-  struct net_if_addr *unicast = NULL;
-  int err = -EIO, i;
-  
-  LOG_DBG("");
-  printf("Calling mgmt_ap_enable()\n");
-
+  int err;
+  printf("++ pico_w_cyw43_mgmt_ap_enable \n", params->ssid);
   pico_w_cyw43_lock(pico_w_cyw43);
   err = __pico_w_cyw43_dev_deconfig(pico_w_cyw43, params);
-
-  /* security */
-  snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "A1=%u\r", pico_w_cyw43->sta.security);
-  err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-  if (err < 0) {
-    LOG_ERR("Unable to set Security");
-    goto error;
+  if (!err) {
+    pico_w_cyw43->req = PICOWCYW43_REQ_AP_ENABLE;
+    k_work_submit_to_queue(&pico_w_cyw43->work_q, &pico_w_cyw43->request_work);
   }
-
-  /* passkey */
-  if (pico_w_cyw43->sta.security != PICOWCYW43_SEC_OPEN) {
-    snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "A2=%s\r", pico_w_cyw43->sta.pass);
-    err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-    if (err < 0) {
-      LOG_ERR("Unable to set passkey");
-      goto error;
-    }
-  }
-
-  /* Set SSID (0=no MAC, 1=append MAC) */
-  snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "AS=0,%s\r", pico_w_cyw43->sta.ssid);
-  err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-  if (err < 0) {
-    LOG_ERR("Unable to set SSID");
-    goto error;
-  }
-
-  /* Set Channel */
-  snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "AC=%u\r", pico_w_cyw43->sta.channel);
-  err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-  if (err < 0) {
-    LOG_ERR("Unable to set Channel");
-    goto error;
-  }
-
-  /* Set IP Address */
-  for (i = 0; ipv4 && i < NET_IF_MAX_IPV4_ADDR; i++) {
-        if (ipv4->unicast[i].is_used) {
-            unicast = &ipv4->unicast[i];
-            break;
-        }
-    }
-
-  pico_w_cyw43_unlock(pico_w_cyw43);
-  return 0;    
-  error:
   pico_w_cyw43_unlock(pico_w_cyw43);
   return err;
 }
