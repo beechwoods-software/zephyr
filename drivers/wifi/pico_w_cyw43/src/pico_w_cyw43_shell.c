@@ -21,7 +21,6 @@ void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev *dev)
 
 	pico_w_cyw43 = dev;
 }
-#endif
 
 static int pico_w_cyw43_shell_led(const struct shell *sh, size_t argc,
 				  char **argv)
@@ -76,7 +75,7 @@ static int pico_w_cyw43_shell_reset(const struct shell *sh, size_t argc,
 	return 0;
 
 }
-
+#endif
 
 void print_task_info(const struct k_thread *thread, void *user_data)
 {
@@ -92,7 +91,7 @@ void picw_w_cyw43_print_tasks(void)
 }
 
 
-
+#if defined(CONFIG_WIFI_RPIPICOWCYW43_SHELL)
 SHELL_STATIC_SUBCMD_SET_CREATE(pico_w_cyw43_shell,
 	SHELL_CMD(led, NULL, "cyw43 led <on|off>", pico_w_cyw43_shell_led),
 	SHELL_CMD(reset, NULL, "cyw43 reset", pico_w_cyw43_shell_reset),
@@ -100,3 +99,4 @@ SHELL_STATIC_SUBCMD_SET_CREATE(pico_w_cyw43_shell,
 );
 
 SHELL_CMD_REGISTER(cyw43, &pico_w_cyw43_shell, "CYW43 debug shell", NULL);
+#endif

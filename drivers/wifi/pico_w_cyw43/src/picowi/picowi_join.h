@@ -44,6 +44,7 @@ bool join_start(char *ssid, char *passwd);
 bool join_stop(void);
 bool join_restart(char *ssid, char *passwd);
 int join_event_handler(EVENT_INFO *eip);
+int my_join_event_handler(EVENT_INFO *eip);
 void join_state_poll(char *ssid, char *passwd);
 int link_check(void);
 int ip_event_handler(EVENT_INFO *eip);

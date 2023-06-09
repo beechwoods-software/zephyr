@@ -8,6 +8,7 @@
 #include <zephyr/net/net_pkt.h>
 
 #include "pico_w_cyw43_drv.h"
+#if defined(CONFIG_BUILD_WITH_PICOWI)
 #include "picowi/picowi_evtnum.h"
 #include "picowi/picowi_ioctl.h"
 #include "picowi/picowi_defs.h"
@@ -17,7 +18,7 @@
 #include "picowi/picowi_pico.h"
 #include "picowi/picowi_scan.h"
 #include "picowi/picowi_join.h"
-
+#endif // CONFIG_BUILD_WITH_PICOWI
 
 #define DT_DRV_COMPAT pico_w_cyw43
 
@@ -33,7 +34,39 @@ static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
 	.power = NULL,
 };
 
+
+#define EVENT_POLL_THREAD_STACK_SIZE 1024
+#define EVENT_POLL_THREAD_PRIO 2
+K_KERNEL_STACK_MEMBER(pico_w_cyw43_event_poll_stack, EVENT_POLL_THREAD_STACK_SIZE);
+
+struct k_thread event_thread;
+
 static struct pico_w_cyw43_dev pico_w_cyw43_0; /* static instance */
+
+static void pico_w_cyw43_event_poll_thread(void *p1)
+{
+	struct pico_w_cyw43_dev *pico_w_cyw43 = p1;
+
+	uint32_t led_ticks, poll_ticks;
+
+	
+	printf("Starting pico_w_cyw43_event_poll_thread\n");
+	
+	while (1) {
+	  //if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
+	    pico_w_cyw43_lock(pico_w_cyw43);
+#if defined(CONFIG_BUILD_WITH_PICOWI)	    
+	    if (event_poll() < 0) {
+	      printf("event_poll() returns < 0\n");
+	      //printf("Total time %lu msec\n", ustime()/1000);
+	    }
+	    //}
+#endif // CONFIG_BUILD_WITH_PICOWI
+	    pico_w_cyw43_unlock(pico_w_cyw43);
+	    k_sleep(K_MSEC(10));
+	}
+	
+}
 
 
 static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
@@ -42,7 +75,7 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 	int i, ret;
 
 	uint32_t led_ticks, poll_ticks;
-	bool ledon=false;
+	bool ledon =false;
 
 	
 	LOG_DBG("");
@@ -51,82 +84,24 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 	LOG_DBG("Scanning for wifi networks.\n");
 	printf("Scanning for wifi networks.\n");
 
-	add_event_handler(scan_event_handler);
-	
+#if defined(CONFIG_BUILD_WITH_PICOWI)	
 	if (!scan_start()) {
 	  printf("Error: can't start scan\n");
+	  pico_w_cyw43->scan_cb(pico_w_cyw43->iface, -EIO, NULL);
 	}
-	else {
-	  while (1) {
-	    // Toggle LED at 1 Hz
-	    if (mstimeout(&led_ticks, 50)) {
-	      wifi_set_led(ledon = !ledon);
-	    }
-	    
-            // Get any events
-            if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
-	      if (event_poll() < 0) {
-		//printf("Total time %lu msec\n", ustime()/1000);
-		break;
-	      }
-            }
-	  }
-	}
+	wifi_set_led(true);	
+#else
+	printf ("George Robotics wifi scan not implemented\n");
+#endif // CONFIG_BUILD_WITH_PICOWI
 
-
-#if 0
-	ret = eswifi_at_cmd_rsp(eswifi, cmd, &data);
-	if (ret < 0) {
-		eswifi->scan_cb(eswifi->iface, -EIO, NULL);
-		eswifi_unlock(eswifi);
-		return;
-	}
-#endif
-	
-#if 0	
-	for (i = 0; i < ret; i++) {
-		if (data[i] == '#') {
-			struct wifi_scan_result res = {0};
-
-			__parse_scan_res(&data[i], &res);
-
-			pico_w_cyw43->scan_cb(pico_w_cyw43->iface, 0, &res);
-			k_yield();
-
-			while (data[i] && data[i] != '\n') {
-				i++;
-			}
-		}
-	}
-#endif
 	/* WiFi scan is done. */
+	
+	printf("calling scan_cb with interface=%s\n", pico_w_cyw43->iface->if_dev->dev->name);
 	pico_w_cyw43->scan_cb(pico_w_cyw43->iface, 0, NULL);
 
 	pico_w_cyw43_unlock(pico_w_cyw43);
 }
 
-// Handler for join events (link & auth changes)
-static int my_join_event_handler(EVENT_INFO *eip)
-{
-    if (eip->chan == SDPCM_CHAN_EVT)
-    {
-        printf(" + join_event_handler chan %u event_type ", eip->chan);
-        switch(eip->event_type) {
-            case WLC_E_ASSOC_REQ_IE: printf("WLC_E_ASSOC_REQ_IE\n"); break;
-            case WLC_E_AUTH: printf("WLC_E_AUTH\n"); break;
-            case WLC_E_ASSOC_RESP_IE: printf("WLC_E_ASSOC_RESP_IE\n"); break;
-            case WLC_E_ASSOC: printf("WLC_E_ASSOC\n"); break;
-            case WLC_E_LINK: printf("WLC_E_LINK -> status=%d LINK_UP_OK=%d\n", eip->status, eip->flags&1 ? 1 :0); break;
-            case WLC_E_PSK_SUP: printf("WLC_E_PSK_SUP LINK_AUTH_OK=%d\n", eip->status==6 ? 1 :0); break;
-            case WLC_E_SET_SSID: printf("WLC_E_SET_SSID\n"); break;
-            case WLC_E_JOIN: printf("WLC_E_JOIN\n"); break;
-            case WLC_E_DISASSOC_IND: printf("WLC_E_DISASSOC_IND\n"); break;
-            case WLC_E_REASSOC: printf("WLC_E_REASSOC\n"); break;
-            default: printf("%u\n", eip->event_type);
-        }
-    }
-    return 0;
-}
 
 static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 {
@@ -135,8 +110,10 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 
 	printf("Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_lock(pico_w_cyw43);
+#if defined(CONFIG_BUILD_WITH_PICOWI)    
     add_event_handler(my_join_event_handler);
     add_event_handler(join_event_handler);
+
     printf("io_init()\n");
     io_init();
     usdelay(1000);
@@ -161,6 +138,9 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
             }
         }
     }
+#else // CONFIG_BUILD_WITH_PICOWI
+    printf("GR _connect function not implemented\n");
+#endif
 	printf("Done Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_unlock(pico_w_cyw43);
 }
@@ -173,8 +153,9 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
 	LOG_DBG("Disconnecting from %s", pico_w_cyw43->sta.ssid);
 
 	pico_w_cyw43_lock(pico_w_cyw43);
-    join_stop();
-
+#if defined(CONFIG_BUILD_WITH_PICOWI)
+	join_stop();
+#endif // CONFIG_BUILD_WITH_PICOWI
 	LOG_DBG("Disconnected!");
 
 	pico_w_cyw43_unlock(pico_w_cyw43);
@@ -198,39 +179,12 @@ static void pico_w_cyw43_status_work(struct k_work *work)
 
 	pico_w_cyw43_lock(pico_w_cyw43);
 
-#if 0	
-	if (eswifi->role == ESWIFI_ROLE_AP) {
-		goto done;
-	}
-
-	ret = eswifi_at_cmd_rsp(eswifi, status, &rsp);
-	if (ret < 1) {
-		LOG_ERR("Unable to retrieve status");
-		goto done;
-	}
-
-	if (rsp[0] == '0' && eswifi->sta.connected) {
-		eswifi->sta.connected = false;
-		wifi_mgmt_raise_disconnect_result_event(eswifi->iface, 0);
-		goto done;
-	} else if (rsp[0] == '1' && !eswifi->sta.connected) {
-		eswifi->sta.connected = true;
-		wifi_mgmt_raise_connect_result_event(eswifi->iface, 0);
-	}
-
-	ret = eswifi_at_cmd_rsp(eswifi, rssi, &rsp);
-	if (ret < 1) {
-		LOG_ERR("Unable to retrieve rssi");
-		/* continue */
-	} else {
-		eswifi->sta.rssi = atoi(rsp);
-	}
-
-	k_work_reschedule_for_queue(&eswifi->work_q, &eswifi->status_work,
-				    K_MSEC(1000 * 30));
-
-#endif //0	
-done:
+#if defined(CONFIG_BUILD_WITH_PICOWI)
+	printf("picowi implementation of _status_work not implemented\n");
+#else // CONFIG_BUILD_WITH_PICOWI
+	printf("GR implementation of _status_work not implemented\n");
+#endif // CONFIG_BUILD_WITH_PICOWI
+	
 	pico_w_cyw43_unlock(pico_w_cyw43);
 }
 
@@ -268,8 +222,19 @@ static void pico_w_cyw43_request_work(struct k_work *item)
 
 static void pico_w_cyw43_iface_init(struct net_if *iface)
 {
+
+
+  struct pico_w_cyw43_dev *pico_w_cyw43 = &pico_w_cyw43_0;
+  
   LOG_DBG("");
   printf("Calling pico_w_cyw43_iface_init()\n");
+
+  pico_w_cyw43_lock(pico_w_cyw43);
+
+  pico_w_cyw43->iface = iface;
+
+  pico_w_cyw43_unlock(pico_w_cyw43);
+
   return;
 }
 
@@ -277,7 +242,7 @@ int pico_w_cyw43_iface_status(const struct device *dev,
 			      struct wifi_iface_status *status)
 {
   LOG_DBG("");
-  printf("Calling ifsce_status()\n");
+  printf("Calling iface_status()\n");
   return 0;
 }
 
@@ -303,7 +268,9 @@ static int pico_w_cyw43_mgmt_scan(const struct device *dev, scan_result_cb_t cb)
 static int __pico_w_cyw43_dev_deconfig(struct pico_w_cyw43_dev *pico_w_cyw43,
                                        struct wifi_connect_req_params *params)
 {
+  //printf("pre - memcpy 1\n");
     memcpy(pico_w_cyw43->sta.ssid, params->ssid, params->ssid_length);
+    //printf("post - memcpy 1\n");
     pico_w_cyw43->sta.ssid[params->ssid_length] = '\0';
 
     switch (params->security) {
@@ -312,7 +279,9 @@ static int __pico_w_cyw43_dev_deconfig(struct pico_w_cyw43_dev *pico_w_cyw43,
         pico_w_cyw43->sta.security = PICOWCYW43_SEC_OPEN;
         break;
     case WIFI_SECURITY_TYPE_PSK:
+      //printf("pre - memcpy 2\n");
         memcpy(pico_w_cyw43->sta.pass, params->psk, params->psk_length);
+	//printf("post - memcpy 2\n");
         pico_w_cyw43->sta.pass[params->psk_length] = '\0';
         pico_w_cyw43->sta.security = PICOWCYW43_SEC_WPA2_MIXED;
         break;
@@ -356,72 +325,19 @@ static int pico_w_cyw43_mgmt_disconnect(const struct device *dev)
   return 0;
 }
 
-int pico_w_cyw43_at_cmd(struct pico_w_cyw43_dev *pico_w_cyw43, char *cmd)
-{
-  return 0;
-}
 
 static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
 				       struct wifi_connect_req_params *params)
 {
   struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
-  struct net_if_ipv4 *ipv4 = pico_w_cyw43->iface->config.ip.ipv4;
-  struct net_if_addr *unicast = NULL;
-  int err = -EIO, i;
   
   LOG_DBG("");
   printf("Calling mgmt_ap_enable()\n");
 
   pico_w_cyw43_lock(pico_w_cyw43);
-  err = __pico_w_cyw43_dev_deconfig(pico_w_cyw43, params);
-
-  /* security */
-  snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "A1=%u\r", pico_w_cyw43->sta.security);
-  err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-  if (err < 0) {
-    LOG_ERR("Unable to set Security");
-    goto error;
-  }
-
-  /* passkey */
-  if (pico_w_cyw43->sta.security != PICOWCYW43_SEC_OPEN) {
-    snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "A2=%s\r", pico_w_cyw43->sta.pass);
-    err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-    if (err < 0) {
-      LOG_ERR("Unable to set passkey");
-      goto error;
-    }
-  }
-
-  /* Set SSID (0=no MAC, 1=append MAC) */
-  snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "AS=0,%s\r", pico_w_cyw43->sta.ssid);
-  err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-  if (err < 0) {
-    LOG_ERR("Unable to set SSID");
-    goto error;
-  }
-
-  /* Set Channel */
-  snprintk(pico_w_cyw43->buf, sizeof(pico_w_cyw43->buf), "AC=%u\r", pico_w_cyw43->sta.channel);
-  err = pico_w_cyw43_at_cmd(pico_w_cyw43, pico_w_cyw43->buf);
-  if (err < 0) {
-    LOG_ERR("Unable to set Channel");
-    goto error;
-  }
-
-  /* Set IP Address */
-  for (i = 0; ipv4 && i < NET_IF_MAX_IPV4_ADDR; i++) {
-        if (ipv4->unicast[i].is_used) {
-            unicast = &ipv4->unicast[i];
-            break;
-        }
-    }
 
   pico_w_cyw43_unlock(pico_w_cyw43);
   return 0;    
-  error:
-  pico_w_cyw43_unlock(pico_w_cyw43);
-  return err;
 }
 
 static int pico_w_cyw43_mgmt_ap_disable(const struct device *dev)
@@ -433,45 +349,59 @@ static int pico_w_cyw43_mgmt_ap_disable(const struct device *dev)
 
 static int pico_w_cyw43_init(const struct device *dev)
 {
-  int rv;
-
   struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
   const struct pico_w_cyw43_cfg *cfg = dev->config;
 
   
   LOG_DBG("");
 
-  pico_w_cyw43->role = PICOWCYW43_ROLE_CLIENT;
   k_mutex_init(&pico_w_cyw43->mutex);
 
-  
   //picw_w_cyw43_print_tasks();
+  
+  pico_w_cyw43->role = PICOWCYW43_ROLE_CLIENT;
+    
+  //k_msleep(1000);
+  //k_msleep(10000);
+  
+#if defined(CONFIG_BUILD_WITH_PICOWI)  
+  add_event_handler(scan_event_handler);
 
   if (!wifi_setup()) {
     LOG_DBG("Error: SPI communication\n");
+    return -ENODEV;
   }
   else if (!wifi_init()) {
     LOG_DBG("Error: can't initialise WiFi\n");
-  }
-  else {
-    rv= 0;
+    return -ENODEV;
   }
   printf("Made it through wifi_setup()\n");
-
-  //picw_w_cyw43_print_tasks();
-
-  k_work_queue_start(&pico_w_cyw43->work_q, pico_w_cyw43_work_q_stack,
-		     K_KERNEL_STACK_SIZEOF(pico_w_cyw43_work_q_stack),
-		     CONFIG_SYSTEM_WORKQUEUE_PRIORITY - 1, NULL);
+#endif // CONFIG_BUILD_WITH_PICOWI
   
-  k_work_init(&pico_w_cyw43->request_work, pico_w_cyw43_request_work);
-  k_work_init_delayable(&pico_w_cyw43->status_work, pico_w_cyw43_status_work);
+    //picw_w_cyw43_print_tasks();
+    
+    k_work_queue_start(&pico_w_cyw43->work_q, pico_w_cyw43_work_q_stack,
+		       K_KERNEL_STACK_SIZEOF(pico_w_cyw43_work_q_stack),
+		       CONFIG_SYSTEM_WORKQUEUE_PRIORITY - 1, NULL);
+    
+    k_work_init(&pico_w_cyw43->request_work, pico_w_cyw43_request_work);
+    k_work_init_delayable(&pico_w_cyw43->status_work, pico_w_cyw43_status_work);
 
-  pico_w_cyw43_shell_register(dev->data);
-
-  wifi_set_led(true);
+    //k_sleep(K_MSEC(100));
+    /* event handling thread */
+#if 1
+    k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
+		    EVENT_POLL_THREAD_STACK_SIZE,
+		    (k_thread_entry_t)pico_w_cyw43_event_poll_thread, pico_w_cyw43, NULL,
+		    NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
+		    K_NO_WAIT);
+#endif    
+    //wifi_set_led(true);
+    
+    pico_w_cyw43_shell_register(pico_w_cyw43);
+    
+    return 0;
   
-  return rv;
 }
 
 static const struct net_wifi_mgmt_offload pico_w_cyw43_callbacks = {
@@ -484,10 +414,32 @@ static const struct net_wifi_mgmt_offload pico_w_cyw43_callbacks = {
 	.iface_status		   = pico_w_cyw43_iface_status, 
 };
 
+#if 1
+NET_DEVICE_OFFLOAD_INIT(pico_w_cyw43_0, "pico_w_cyw43", pico_w_cyw43_init, NULL,
+			&pico_w_cyw43_0, NULL,
+			CONFIG_WIFI_INIT_PRIORITY,
+			&pico_w_cyw43_callbacks,
+			1500);
+#else
 NET_DEVICE_DT_INST_OFFLOAD_DEFINE(0, pico_w_cyw43_init, NULL,
 				  &pico_w_cyw43_0, &pico_w_cyw43_cfg,
 				  CONFIG_WIFI_INIT_PRIORITY,
 				  &pico_w_cyw43_callbacks,
 				  1500);
+#endif
 
+#if 0
+static int pico_w_cyw43_isr(const struct device *dev)
+{
 
+}
+
+static void pico_w_cyw43_irq_config(void)
+{
+  IRQ_CONNECT(DT_INST_IRQN(0),
+	      DT_INST_IRQ(0, priority), pico_w_cyw43_isr,
+	      DEVICE_DT_INST_GET(0), 0);
+  irq_enable(DT_INST_IRQN(0));
+}
+
+#endif

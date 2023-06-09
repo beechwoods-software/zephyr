@@ -160,6 +160,30 @@ int join_event_handler(EVENT_INFO *eip)
     return(ret);
 }
 
+// Handler for join events (link & auth changes)
+int my_join_event_handler(EVENT_INFO *eip)
+{
+    if (eip->chan == SDPCM_CHAN_EVT)
+    {
+        printf(" + join_event_handler chan %u event_type ", eip->chan);
+        switch(eip->event_type) {
+            case WLC_E_ASSOC_REQ_IE: printf("WLC_E_ASSOC_REQ_IE\n"); break;
+            case WLC_E_AUTH: printf("WLC_E_AUTH\n"); break;
+            case WLC_E_ASSOC_RESP_IE: printf("WLC_E_ASSOC_RESP_IE\n"); break;
+            case WLC_E_ASSOC: printf("WLC_E_ASSOC\n"); break;
+            case WLC_E_LINK: printf("WLC_E_LINK -> status=%d LINK_UP_OK=%d\n", eip->status, eip->flags&1 ? 1 :0); break;
+            case WLC_E_PSK_SUP: printf("WLC_E_PSK_SUP LINK_AUTH_OK=%d\n", eip->status==6 ? 1 :0); break;
+            case WLC_E_SET_SSID: printf("WLC_E_SET_SSID\n"); break;
+            case WLC_E_JOIN: printf("WLC_E_JOIN\n"); break;
+            case WLC_E_DISASSOC_IND: printf("WLC_E_DISASSOC_IND\n"); break;
+            case WLC_E_REASSOC: printf("WLC_E_REASSOC\n"); break;
+            default: printf("%u\n", eip->event_type);
+        }
+    }
+    return 0;
+}
+
+
 // Poll the network joining state machine
 void join_state_poll(char *ssid, char *passwd)
 {
