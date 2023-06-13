@@ -8,6 +8,7 @@
 #include <zephyr/net/net_pkt.h>
 
 #include "pico_w_cyw43_drv.h"
+
 #if defined(CONFIG_BUILD_WITH_PICOWI)
 #include "picowi/picowi_evtnum.h"
 #include "picowi/picowi_ioctl.h"
@@ -18,6 +19,11 @@
 #include "picowi/picowi_pico.h"
 #include "picowi/picowi_scan.h"
 #include "picowi/picowi_join.h"
+
+#else
+#include "georgerobotics/cyw43.h"
+#include "georgerobotics/cyw43_country.h"
+#define CYW43_GPIO_IRQ_HANDLER_PRIORITY 0x40
 #endif // CONFIG_BUILD_WITH_PICOWI
 
 #define DT_DRV_COMPAT pico_w_cyw43
@@ -347,6 +353,108 @@ static int pico_w_cyw43_mgmt_ap_disable(const struct device *dev)
   return 0;
 }
 
+#if defined(CONFIG_BUILD_WITH_PICOWI)
+
+#else
+
+void cyw43_cb_tcpip_deinit(cyw43_t *self, int itf)
+{
+  printf("Calling cyw43_cb_tcpip_deinit(itf=%d)\n", itf);
+  return;
+}
+
+void cyw43_cb_process_ethernet(void *cb_data, int itf, size_t len, const uint8_t *buf)
+{
+  printf("Calling cyw43_cb_process_ethernet(itf=%d)\n");
+  return;
+}
+
+void cyw43_hal_generate_laa_mac(int idx, uint8_t buf[6])
+{
+  printf("cyw43_hal_generate_laa_mac(idx=%d)\n");
+  return;
+}
+
+void cyw43_cb_tcpip_init(cyw43_t *self, int itf)
+{
+  printf("cyw43_cb_tcpip_init(itf=%d)\n");
+  return;
+}
+
+void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf)
+{
+  printf("Calling cyw43_cb_tcpip_set_link_up(itf=%d)\n");
+  return;
+}
+
+void cyw43_cb_tcpip_set_link_down(cyw43_t *self, int itf)
+{
+  printf("Calling cyw43_cb_tcpip_set_link_down(itf=%d)\n");
+  return;
+}
+
+void cyw43_schedule_internal_poll_dispatch(void (*func)(void)) {
+  printf("Calling cyw43_schedule_internal_poll_dispatch()\n");
+  assert(func == cyw43_poll);
+  return;
+}
+
+static void cyw43_set_irq_enabled(bool enabled)
+{
+  printf("Calling cyw43_set_irq_enabled(%s)\n", (enabled ? "true" : "false"));
+  gpio_set_irq_enabled(CYW43_PIN_WL_HOST_WAKE, GPIO_IRQ_LEVEL_HIGH, enabled);
+}
+
+static void cyw43_gpio_irq_handler(void)
+{
+    uint32_t events = gpio_get_irq_event_mask(CYW43_PIN_WL_HOST_WAKE);
+    if (events & GPIO_IRQ_LEVEL_HIGH) {
+        // As we use a high level interrupt, it will go off forever until it's serviced
+        // So disable the interrupt until this is done. It's re-enabled again by CYW43_POST_POLL_HOOK
+        // which is called at the end of cyw43_poll_func
+        cyw43_set_irq_enabled(false);
+        //async_context_set_work_pending(cyw43_async_context, &cyw43_poll_worker);
+    }
+}
+
+void cyw43_post_poll_hook(void)
+{
+  printf("Calling cyw43_post_poll_hook()\n");
+  cyw43_set_irq_enabled(true);
+}
+
+void cyw43_thread_enter(void)
+{
+  printf("Calling cyw43_thread_enter()\n");
+  pico_w_cyw43_lock(&pico_w_cyw43_0);
+}
+
+void cyw43_thread_exit(void)
+{
+  printf("Calling cyw43_thread_exit()\n");
+  pico_w_cyw43_unlock(&pico_w_cyw43_0);
+}
+
+
+void cyw43_delay_ms(uint32_t ms) {
+  k_sleep(K_MSEC(ms));
+}
+
+void sleep_ms(uint32_t ms) {
+  k_sleep(K_MSEC(ms));
+}
+
+void cyw43_delay_us(uint32_t us) {
+  k_sleep(K_MSEC(us*1000));
+}
+
+void cyw43_await_background_or_timeout_us(uint32_t timeout_us) {
+  k_sleep(K_MSEC(timeout_us*1000));
+}
+
+
+#endif // CONFIG_BUILD_WITH_PICOWI
+
 static int pico_w_cyw43_init(const struct device *dev)
 {
   struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
@@ -376,6 +484,16 @@ static int pico_w_cyw43_init(const struct device *dev)
     return -ENODEV;
   }
   printf("Made it through wifi_setup()\n");
+#else
+
+  cyw43_init(&cyw43_state);
+  // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c IRQ setup happens next
+  //gpio_add_raw_irq_handler_with_order_priority(CYW43_PIN_WL_HOST_WAKE, cyw43_gpio_irq_handler, CYW43_GPIO_IRQ_HANDLER_PRIORITY);
+  //cyw43_set_irq_enabled(true);
+  //irq_set_enabled(IO_IRQ_BANK0, true);  
+  //cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
+  return 0;
+
 #endif // CONFIG_BUILD_WITH_PICOWI
   
     //picw_w_cyw43_print_tasks();
