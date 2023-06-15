@@ -38,6 +38,7 @@ static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
       	.data = NULL,
         .clock = NULL,
 	.power = NULL,
+	.irq_gpio = NULL//= GPIO_DT_SPEC_INST_GET(0, mosi_gpios),
 };
 
 
@@ -57,6 +58,8 @@ static void pico_w_cyw43_event_poll_thread(void *p1)
 
 	
 	printf("Starting pico_w_cyw43_event_poll_thread\n");
+
+	k_thread_name_set(NULL, "pico_w_cyw43_event_poll_thread");
 	
 	while (1) {
 	  //if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
@@ -67,6 +70,10 @@ static void pico_w_cyw43_event_poll_thread(void *p1)
 	      //printf("Total time %lu msec\n", ustime()/1000);
 	    }
 	    //}
+#else
+	    if (cyw43_poll) {
+	      cyw43_poll();
+	    }
 #endif // CONFIG_BUILD_WITH_PICOWI
 	    pico_w_cyw43_unlock(pico_w_cyw43);
 	    k_sleep(K_MSEC(10));
@@ -402,9 +409,11 @@ void cyw43_schedule_internal_poll_dispatch(void (*func)(void)) {
 static void cyw43_set_irq_enabled(bool enabled)
 {
   printf("Calling cyw43_set_irq_enabled(%s)\n", (enabled ? "true" : "false"));
+  // ******   Probably should use the Zephyr rather than Pico SDK version of this *******//
   gpio_set_irq_enabled(CYW43_PIN_WL_HOST_WAKE, GPIO_IRQ_LEVEL_HIGH, enabled);
 }
 
+#if 0
 static void cyw43_gpio_irq_handler(void)
 {
     uint32_t events = gpio_get_irq_event_mask(CYW43_PIN_WL_HOST_WAKE);
@@ -416,6 +425,7 @@ static void cyw43_gpio_irq_handler(void)
         //async_context_set_work_pending(cyw43_async_context, &cyw43_poll_worker);
     }
 }
+#endif
 
 void cyw43_post_poll_hook(void)
 {
@@ -435,7 +445,6 @@ void cyw43_thread_exit(void)
   pico_w_cyw43_unlock(&pico_w_cyw43_0);
 }
 
-
 void cyw43_delay_ms(uint32_t ms) {
   k_sleep(K_MSEC(ms));
 }
@@ -452,8 +461,35 @@ void cyw43_await_background_or_timeout_us(uint32_t timeout_us) {
   k_sleep(K_MSEC(timeout_us*1000));
 }
 
-
 #endif // CONFIG_BUILD_WITH_PICOWI
+
+struct gpio_callback pico_w_cyw43_gpio_cb;
+
+static int pico_w_cyw43_isr(const struct device *port,
+			    struct gpio_callback *cb,
+			    gpio_port_pins_t pins)
+{
+  printf("Calling pico_w_cyw43_isr\n");
+}
+
+static void pico_w_cyw43_register_isr(const struct device *port)
+{
+  int rv;
+  
+  //Note that this is technically a gpio_callback, not a true isr
+  gpio_init_callback(&pico_w_cyw43_gpio_cb,
+		     pico_w_cyw43_isr,
+		     BIT(24/*pico_w_cyw43_cfg.irq_gpio.pin*/));
+
+  rv = gpio_add_callback(port/*pico_w_cyw43_cfg.irq_gpio.port*/, &pico_w_cyw43_gpio_cb);
+
+  printf("gpio_add_callback() returned %d\n", rv);
+  
+  rv = gpio_pin_interrupt_configure(port/*pico_w_cyw43_cfg.irq_gpio.port*/, 24, GPIO_INT_EDGE_TO_ACTIVE);
+
+  printf("gpio_pin_interrupt_configure(() returned %d\n", rv);
+}
+
 
 static int pico_w_cyw43_init(const struct device *dev)
 {
@@ -485,13 +521,27 @@ static int pico_w_cyw43_init(const struct device *dev)
   }
   printf("Made it through wifi_setup()\n");
 #else
+    /* event handling thread */
 
   cyw43_init(&cyw43_state);
-  // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c IRQ setup happens next
-  //gpio_add_raw_irq_handler_with_order_priority(CYW43_PIN_WL_HOST_WAKE, cyw43_gpio_irq_handler, CYW43_GPIO_IRQ_HANDLER_PRIORITY);
-  //cyw43_set_irq_enabled(true);
-  //irq_set_enabled(IO_IRQ_BANK0, true);  
-  //cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
+  // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c:cyw43_driver_init() IRQ setup happens next
+  
+  pico_w_cyw43_register_isr(dev);
+
+  /* If I try to enable irq this way, everything hangs (maybe because I'm using the rpi SDK
+  // gpio_set_irq_enabled() routine in cyw43_set_irq_enabled() rather than Zephyr GPIO API? */
+  // cyw43_set_irq_enabled(true);
+
+  
+#if 0
+    k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
+		    EVENT_POLL_THREAD_STACK_SIZE,
+		    (k_thread_entry_t)pico_w_cyw43_event_poll_thread, pico_w_cyw43, NULL,
+		    NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
+		    K_NO_WAIT);
+#endif    
+
+  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
   return 0;
 
 #endif // CONFIG_BUILD_WITH_PICOWI
@@ -506,14 +556,6 @@ static int pico_w_cyw43_init(const struct device *dev)
     k_work_init_delayable(&pico_w_cyw43->status_work, pico_w_cyw43_status_work);
 
     //k_sleep(K_MSEC(100));
-    /* event handling thread */
-#if 1
-    k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
-		    EVENT_POLL_THREAD_STACK_SIZE,
-		    (k_thread_entry_t)pico_w_cyw43_event_poll_thread, pico_w_cyw43, NULL,
-		    NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
-		    K_NO_WAIT);
-#endif    
     //wifi_set_led(true);
     
     pico_w_cyw43_shell_register(pico_w_cyw43);
@@ -546,18 +588,5 @@ NET_DEVICE_DT_INST_OFFLOAD_DEFINE(0, pico_w_cyw43_init, NULL,
 				  1500);
 #endif
 
-#if 0
-static int pico_w_cyw43_isr(const struct device *dev)
-{
 
-}
 
-static void pico_w_cyw43_irq_config(void)
-{
-  IRQ_CONNECT(DT_INST_IRQN(0),
-	      DT_INST_IRQ(0, priority), pico_w_cyw43_isr,
-	      DEVICE_DT_INST_GET(0), 0);
-  irq_enable(DT_INST_IRQN(0));
-}
-
-#endif

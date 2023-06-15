@@ -11,7 +11,7 @@ menuconfig WIFI_RPIPICOWCYW43
 	select NET_OFFLOAD
 	select NET_SOCKETS
 	imply NET_SOCKETS_OFFLOAD
-	#select GPIO
+	select GPIO
 	select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
 	select PICOSDK_USE_DMA
 	#select PICOSDK_USE_CLAIM

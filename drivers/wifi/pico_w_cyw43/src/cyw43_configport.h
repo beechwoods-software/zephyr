@@ -148,6 +148,8 @@ void cyw43_thread_exit(void);
 
 #define CYW43_THREAD_LOCK_CHECK
 
+#define CYW43_EVENT_POLL_HOOK k_yield();
+  
 void cyw43_await_background_or_timeout_us(uint32_t timeout_us);
 // todo not 100% sure about the timeouts here; MP uses __WFI which will always wakeup periodically
 #define CYW43_SDPCM_SEND_COMMON_WAIT cyw43_await_background_or_timeout_us(1000);
