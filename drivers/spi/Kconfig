@@ -123,6 +123,6 @@ source "drivers/spi/Kconfig.smartbond"
 
 source "drivers/spi/Kconfig.opentitan"
 
-source "drivers/spi/Kconfig.rpi_pico"
+source "drivers/spi/Kconfig.rp2040"
 
 endif # SPI
