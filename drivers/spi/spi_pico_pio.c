@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT raspberrypi_rp2040_spi_pio
+#define DT_DRV_COMPAT raspberrypi_pico_spi_pio
 
 #define LOG_LEVEL CONFIG_SPI_LOG_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(spi_rp2040_pio);
+LOG_MODULE_REGISTER(spi_pico_pio);
 
 #include <zephyr/sys/sys_io.h>
 #include <zephyr/drivers/spi.h>
@@ -23,7 +23,7 @@ LOG_MODULE_REGISTER(spi_rp2040_pio);
 #define PIO_CYCLES		(2)
 #define PIO_FIFO_DEPTH	(4)
 
-struct spi_rp2040_pio_config {
+struct spi_pico_pio_config {
 	const struct device *piodev;
 	const struct pinctrl_dev_config *pin_cfg;
 	struct gpio_dt_spec clk_gpio;
@@ -31,7 +31,7 @@ struct spi_rp2040_pio_config {
 	struct gpio_dt_spec miso_gpio;
 };
 
-struct spi_rp2040_pio_data {
+struct spi_pico_pio_data {
 	struct spi_context spi_ctx;
 	uint32_t tx_count;
 	uint32_t rx_count;
@@ -57,25 +57,25 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_input_on_fall, 0, 1,
             //     .wrap
 );
 
-static float spi_rp2040_pio_clock_divisor(uint32_t spi_frequency) {
+static float spi_pico_pio_clock_divisor(uint32_t spi_frequency) {
 	return (float)clock_get_hz(clk_sys) / (float)(PIO_CYCLES * spi_frequency);
 }
 
-static uint32_t spi_rp2040_pio_maximum_clock_frequency() {
+static uint32_t spi_pico_pio_maximum_clock_frequency() {
 	return clock_get_hz(clk_sys) / PIO_CYCLES;
 }
 
-static uint32_t spi_rp2040_pio_minimum_clock_frequency() {
+static uint32_t spi_pico_pio_minimum_clock_frequency() {
 	return clock_get_hz(clk_sys) / (PIO_CYCLES * 65536);
 }
 
-static inline bool spi_rp2040_pio_transfer_ongoing(struct spi_rp2040_pio_data *data)
+static inline bool spi_pico_pio_transfer_ongoing(struct spi_pico_pio_data *data)
 {
 	return spi_context_tx_on(&data->spi_ctx) || spi_context_rx_on(&data->spi_ctx);
 }
 
-static int spi_rp2040_pio_configure(const struct spi_rp2040_pio_config *dev_cfg,
-			    struct spi_rp2040_pio_data *data,
+static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
+			    struct spi_pico_pio_data *data,
 			    const struct spi_config *spi_cfg)
 {
 	const struct gpio_dt_spec *miso = NULL;
@@ -123,13 +123,13 @@ static int spi_rp2040_pio_configure(const struct spi_rp2040_pio_config *dev_cfg,
 	data->bits = bits;
 	data->dfs = ((data->bits - 1) / 8) + 1;
 
-	if ((spi_cfg->frequency > spi_rp2040_pio_maximum_clock_frequency())
-			|| (spi_cfg->frequency < spi_rp2040_pio_minimum_clock_frequency())) {
+	if ((spi_cfg->frequency > spi_pico_pio_maximum_clock_frequency())
+			|| (spi_cfg->frequency < spi_pico_pio_minimum_clock_frequency())) {
 		LOG_ERR("clock-frequency out of range");
 		return -EINVAL;
 	}
 
-	float clock_div = spi_rp2040_pio_clock_divisor(spi_cfg->frequency);
+	float clock_div = spi_pico_pio_clock_divisor(spi_cfg->frequency);
 
 	/* Half-duplex mode has not been implemented */
 	if (spi_cfg->operation & SPI_HALF_DUPLEX) {
@@ -202,9 +202,9 @@ static int spi_rp2040_pio_configure(const struct spi_rp2040_pio_config *dev_cfg,
 	return 0;
 }
 
-static void spi_rp2040_pio_txrx(const struct device *dev)
+static void spi_pico_pio_txrx(const struct device *dev)
 {
-	struct spi_rp2040_pio_data *data = dev->data;
+	struct spi_pico_pio_data *data = dev->data;
 	const size_t chunk_len = spi_context_max_continuous_chunk(&data->spi_ctx);
 	const void *txbuf = data->spi_ctx.tx_buf;
 	void *rxbuf = data->spi_ctx.rx_buf;
@@ -246,7 +246,7 @@ static void spi_rp2040_pio_txrx(const struct device *dev)
 	}
 }
 
-static int spi_rp2040_pio_transceive_impl(const struct device *dev,
+static int spi_pico_pio_transceive_impl(const struct device *dev,
 				     const struct spi_config *spi_cfg,
 				     const struct spi_buf_set *tx_bufs,
 				     const struct spi_buf_set *rx_bufs,
@@ -254,14 +254,14 @@ static int spi_rp2040_pio_transceive_impl(const struct device *dev,
 				     spi_callback_t cb,
 				     void *userdata)
 {
-	const struct spi_rp2040_pio_config *dev_cfg = dev->config;
-	struct spi_rp2040_pio_data *data = dev->data;
+	const struct spi_pico_pio_config *dev_cfg = dev->config;
+	struct spi_pico_pio_data *data = dev->data;
 	struct spi_context *spi_ctx = &data->spi_ctx;
 	int rc;
 
 	spi_context_lock(spi_ctx, asynchronous, cb, userdata, spi_cfg);
 
-	rc = spi_rp2040_pio_configure(dev_cfg, data, spi_cfg);
+	rc = spi_pico_pio_configure(dev_cfg, data, spi_cfg);
 	if (rc < 0) {
 		return rc;
 	}
@@ -274,10 +274,10 @@ static int spi_rp2040_pio_transceive_impl(const struct device *dev,
 	spi_context_cs_control(spi_ctx, true);
 
 	do {
-		spi_rp2040_pio_txrx(dev);
+		spi_pico_pio_txrx(dev);
 		spi_context_update_tx(spi_ctx, 1, data->tx_count);
 		spi_context_update_rx(spi_ctx, 1, data->rx_count);
-	} while (spi_rp2040_pio_transfer_ongoing(data));
+	} while (spi_pico_pio_transfer_ongoing(data));
 
 	spi_context_cs_control(spi_ctx, false);
 
@@ -289,7 +289,7 @@ static int spi_rp2040_pio_transceive_impl(const struct device *dev,
 	return 0;
 }
 
-static int spi_rp2040_pio_transceive(const struct device *dev,
+static int spi_pico_pio_transceive(const struct device *dev,
 				const struct spi_config *spi_cfg,
 				const struct spi_buf_set *tx_bufs,
 				const struct spi_buf_set *rx_bufs)
@@ -297,22 +297,22 @@ static int spi_rp2040_pio_transceive(const struct device *dev,
 	// TODO:  Add interrupt support
 	// TODO:  Add DMA support
 	// TODO:  Ponder adding async operation
-	return spi_rp2040_pio_transceive_impl(dev, spi_cfg, tx_bufs, rx_bufs, false, NULL, NULL);
+	return spi_pico_pio_transceive_impl(dev, spi_cfg, tx_bufs, rx_bufs, false, NULL, NULL);
 }
 
-int spi_rp2040_pio_release(const struct device *dev,
+int spi_pico_pio_release(const struct device *dev,
 			  const struct spi_config *spi_cfg)
 {
-	struct spi_rp2040_pio_data *data = dev->data;
+	struct spi_pico_pio_data *data = dev->data;
 
 	spi_context_unlock_unconditionally(&data->spi_ctx);
 
 	return 0;
 }
 
-static struct spi_driver_api spi_rp2040_pio_api = {
-	.transceive = spi_rp2040_pio_transceive,
-	.release = spi_rp2040_pio_release,
+static struct spi_driver_api spi_pico_pio_api = {
+	.transceive = spi_pico_pio_transceive,
+	.release = spi_pico_pio_release,
 };
 
 static int config_gpio(const struct gpio_dt_spec *gpio, const char *tag, int mode)
@@ -333,10 +333,10 @@ static int config_gpio(const struct gpio_dt_spec *gpio, const char *tag, int mod
 	return 0;
 }
 
-int spi_rp2040_pio_init(const struct device *dev)
+int spi_pico_pio_init(const struct device *dev)
 {
-	const struct spi_rp2040_pio_config *dev_cfg = dev->config;
-	struct spi_rp2040_pio_data *data = dev->data;
+	const struct spi_pico_pio_config *dev_cfg = dev->config;
+	struct spi_pico_pio_data *data = dev->data;
 	int rc;
 
 	rc = pinctrl_apply_state(dev_cfg->pin_cfg, PINCTRL_STATE_DEFAULT);
@@ -375,26 +375,26 @@ int spi_rp2040_pio_init(const struct device *dev)
 	return 0;
 }
 
-#define SPI_RP2040_PIO_INIT(inst)						\
-	static struct spi_rp2040_pio_config spi_rp2040_pio_config_##inst = {	\
+#define SPI_PICO_PIO_INIT(inst)						\
+	static struct spi_pico_pio_config spi_pico_pio_config_##inst = {	\
 		.clk_gpio = GPIO_DT_SPEC_INST_GET(inst, clk_gpios),	\
 		.mosi_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, mosi_gpios, {0}),	\
 		.miso_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, miso_gpios, {0}),	\
 	};								\
 									\
-	static struct spi_rp2040_pio_data spi_rp2040_pio_data_##inst = {	\
-		SPI_CONTEXT_INIT_LOCK(spi_rp2040_pio_data_##inst, spi_ctx),	\
-		SPI_CONTEXT_INIT_SYNC(spi_rp2040_pio_data_##inst, spi_ctx),	\
+	static struct spi_pico_pio_data spi_pico_pio_data_##inst = {	\
+		SPI_CONTEXT_INIT_LOCK(spi_pico_pio_data_##inst, spi_ctx),	\
+		SPI_CONTEXT_INIT_SYNC(spi_pico_pio_data_##inst, spi_ctx),	\
 		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(inst), spi_ctx)	\
 	};								\
 									\
 	DEVICE_DT_INST_DEFINE(inst,					\
-			    spi_rp2040_pio_init,				\
+			    spi_pico_pio_init,				\
 			    NULL,					\
-			    &spi_rp2040_pio_data_##inst,			\
-			    &spi_rp2040_pio_config_##inst,			\
+			    &spi_pico_pio_data_##inst,			\
+			    &spi_pico_pio_config_##inst,			\
 			    POST_KERNEL,				\
 			    CONFIG_SPI_INIT_PRIORITY,			\
-			    &spi_rp2040_pio_api);
+			    &spi_pico_pio_api);
 
-DT_INST_FOREACH_STATUS_OKAY(SPI_RP2040_PIO_INIT)
+DT_INST_FOREACH_STATUS_OKAY(SPI_PICO_PIO_INIT)
