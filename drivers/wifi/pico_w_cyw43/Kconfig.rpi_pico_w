@@ -28,6 +28,11 @@ config WIFI_RPIPICOWCYW43_SHELL
 config BUILD_WITH_PICOWI
         bool "Use picowi driver implementation"
 	default n
+
+config BUILD_CYW43_WITH_ZEPHYR_PIO_SPI
+        bool "Use Zephyr's PIO SPI bus"
+	default n
+
 #
 #choice WIFI_RPIPICOWCYW43_BUS
 #	bool "Select BUS interface"

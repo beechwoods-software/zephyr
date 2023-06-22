@@ -15,6 +15,16 @@ if(CONFIG_WIFI_RPIPICOWCYW43)
       src/picowi/picowi_join.c
       src/picowi/fw_43439.c
     )
+  elseif(CONFIG_BUILD_CYW43_WITH_ZEPHYR_PIO_SPI)
+    zephyr_library_include_directories(src/ src/georgerobotics/)
+    
+    zephyr_library_sources(
+      src/pico_w_cyw43_drv.c
+      src/pico_w_cyw43_shell.c
+      src/georgerobotics/cyw43_ll.c
+      src/georgerobotics/cyw43_ctrl.c
+      src/cyw43_bus_zephyr_pio_spi.c
+    )
   else()
     zephyr_library_include_directories(src/ src/rpi2_common/ src/georgerobotics/)
     
