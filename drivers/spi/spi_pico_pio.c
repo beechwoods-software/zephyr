@@ -92,6 +92,10 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	const pio_program_t * program;
 	int rc;
 
+	// DEBUG
+	printk("Entering spi_pico_pio_configure(dev_cfg=%p, data=%p, spi_cfg=%p)\n", dev_cfg, data, spi_cfg);
+	// DEBUG END
+
 	if (spi_context_configured(&data->spi_ctx, spi_cfg)) {
 		return 0;
 	}
@@ -149,11 +153,34 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 
 	if (dev_cfg->mosi_gpio.port) {
 		mosi = &dev_cfg->mosi_gpio;
+
+		// DEBUG
+		printk("mosi=%p, mosi->pin=%d\n", mosi, mosi->pin);
+		// DEBUG END
 	}
 
 	if (dev_cfg->miso_gpio.port) {
 		miso = &dev_cfg->miso_gpio;
+
+		// DEBUG
+		printk("miso=%p, miso->pin=%d\n", miso, miso->pin);
+		// DEBUG END
 	}
+
+	// DEBUG
+	int quotient = (int)clock_div;
+	int fraction = (clock_div - (float)quotient) * 256;
+	printk("quotient=%d, fraction=%d\n", quotient, fraction);
+	const struct device *pio_device = dev_cfg->piodev;
+	printk("pio_device=%p\n", pio_device);
+	if (pio_device->name != NULL) {
+		printk("Device name=%s\n", pio_device->name);
+	} else {
+		printk("No device name\n");
+	}
+	printk("pio_device->config=%p, pio_device->data=%p, pio_device->api=%p)\n",
+		pio_device->config, pio_device->data, pio_device->api);
+	// DEBUG END
 
 	data->pio = pio_rpi_pico_get_pio(dev_cfg->piodev);
 	rc = pio_rpi_pico_allocate_sm(dev_cfg->piodev, &sm);
@@ -377,6 +404,8 @@ int spi_pico_pio_init(const struct device *dev)
 
 #define SPI_PICO_PIO_INIT(inst)						\
 	static struct spi_pico_pio_config spi_pico_pio_config_##inst = {	\
+		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),					\
+		.pin_cfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),					\
 		.clk_gpio = GPIO_DT_SPEC_INST_GET(inst, clk_gpios),	\
 		.mosi_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, mosi_gpios, {0}),	\
 		.miso_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, miso_gpios, {0}),	\
