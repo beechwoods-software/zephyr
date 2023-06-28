@@ -149,6 +149,7 @@
  */
 &os_timer {
 	status = "okay";
+	wakeup-source;
 };
 
 &rtc {
@@ -248,6 +249,30 @@ hs_spi1: &hs_lspi1 {
 	dmas = <&dma0 28>, <&dma0 29>;
 	dma-names = "rx", "tx";
 	status = "okay";
+};
+
+/* I2S RX */
+i2s0: &flexcomm1 {
+	compatible = "nxp,lpc-i2s";
+	pinctrl-0 = <&pinmux_flexcomm1_i2s>;
+	pinctrl-names = "default";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	dmas = <&dma0 2>;
+	dma-names = "rx";
+	status = "disabled";
+};
+
+/* I2S TX */
+i2s1: &flexcomm3 {
+	compatible = "nxp,lpc-i2s";
+	pinctrl-0 = <&pinmux_flexcomm3_i2s>;
+	pinctrl-names = "default";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	dmas = <&dma0 7>;
+	dma-names = "tx";
+	status = "disabled";
 };
 
 arduino_serial: &flexcomm12 {
@@ -501,5 +526,12 @@ zephyr_udc0: &usbhs {
 &sc_timer {
 	pinctrl-0 = <&pinmux_sctimer_default>;
 	pinctrl-names = "default";
+	status = "okay";
+};
+
+&i3c0 {
+	pinctrl-0 = <&pinmux_i3c>;
+	pinctrl-names = "default";
+
 	status = "okay";
 };

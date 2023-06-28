@@ -288,9 +288,24 @@ static void clock_init(void)
 #if CONFIG_USB_DC_NXP_LPCIP3511
 	usb_device_clock_init();
 #endif
+
+#if (DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(flexcomm1), nxp_lpc_i2s, okay) && CONFIG_I2S)
+	/* attach AUDIO PLL clock to FLEXCOMM1 (I2S1) */
+	CLOCK_AttachClk(kAUDIO_PLL_to_FLEXCOMM1);
+#endif
+#if (DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(flexcomm3), nxp_lpc_i2s, okay) && CONFIG_I2S)
+	/* attach AUDIO PLL clock to FLEXCOMM3 (I2S3) */
+	CLOCK_AttachClk(kAUDIO_PLL_to_FLEXCOMM3);
+#endif
+
 #if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(flexcomm4), nxp_lpc_i2c, okay)
 	/* Switch FLEXCOMM4 to FRO_DIV4 */
 	CLOCK_AttachClk(kFRO_DIV4_to_FLEXCOMM4);
+#endif
+#if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(i3c0), nxp_mcux_i3c, okay)
+	/* Attach main clock to I3C, divider will be set in i3c_mcux.c */
+	CLOCK_AttachClk(kMAIN_CLK_to_I3C_CLK);
+	CLOCK_AttachClk(kLPOSC_to_I3C_TC_CLK);
 #endif
 #if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(hs_spi1), nxp_lpc_spi, okay)
 	CLOCK_AttachClk(kFRO_DIV4_to_FLEXCOMM16);
