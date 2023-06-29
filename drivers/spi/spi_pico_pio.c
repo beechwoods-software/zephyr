@@ -403,6 +403,7 @@ int spi_pico_pio_init(const struct device *dev)
 }
 
 #define SPI_PICO_PIO_INIT(inst)						\
+	PINCTRL_DT_INST_DEFINE(inst);								\
 	static struct spi_pico_pio_config spi_pico_pio_config_##inst = {	\
 		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),					\
 		.pin_cfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),					\
