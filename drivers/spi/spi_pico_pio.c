@@ -94,6 +94,7 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 
 	// DEBUG
 	printk("Entering spi_pico_pio_configure(dev_cfg=%p, data=%p, spi_cfg=%p)\n", dev_cfg, data, spi_cfg);
+	printk("spi_cfg->operation=0x%X\n", spi_cfg->operation);
 	// DEBUG END
 
 	if (spi_context_configured(&data->spi_ctx, spi_cfg)) {
@@ -151,6 +152,11 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 		loop = true;
 	}
 
+	// DEBUG
+	printk("data->bits=%d, data->dfs=%d\n", data->bits, data->dfs);
+	printk("cpol=%d, cpha=%d, loop=%s\n", cpol, cpha, (loop ? "true" : "false"));
+	// DEBUG END
+
 	if (dev_cfg->mosi_gpio.port) {
 		mosi = &dev_cfg->mosi_gpio;
 
@@ -167,7 +173,10 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 		// DEBUG END
 	}
 
+	clk = &dev_cfg->clk_gpio;
+
 	// DEBUG
+	printk("clk=%p, clk->pin=%d\n", clk, clk->pin);
 	int quotient = (int)clock_div;
 	int fraction = (clock_div - (float)quotient) * 256;
 	printk("quotient=%d, fraction=%d\n", quotient, fraction);
@@ -183,7 +192,14 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	// DEBUG END
 
 	data->pio = pio_rpi_pico_get_pio(dev_cfg->piodev);
+	// DEBUG
+	printk("data->pio=%p\n", data->pio);
+	// DEBUG END
+
 	rc = pio_rpi_pico_allocate_sm(dev_cfg->piodev, &sm);
+	// DEBUG
+	printk("sm=%d\n", sm);
+	// DEBUG END
 	if (rc < 0) {
 		return rc;
 	}
@@ -204,6 +220,9 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 
 	offset = pio_add_program(data->pio, program);
 	sm_config = pio_get_default_sm_config();
+	// DEBUG
+	printk("offset=%d\n", offset);
+	// DEBUG END
 
 	sm_config_set_clkdiv(&sm_config, clock_div);
 	sm_config_set_in_pins(&sm_config, miso->pin);
@@ -216,15 +235,27 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 			   offset + wrap_target,
 			   offset + wrap);
 
+	// DEBUG
+	printk("sm_config.clkdiv=0x%X, sm_config.execctrl=0x%X, sm_config.pinctrl=0x%X, sm_config.shiftctrl=0x%X\n",
+		sm_config.clkdiv, sm_config.execctrl, sm_config.pinctrl, sm_config.shiftctrl);
+	printk("pindirs: 0x%lX, pinval0x%X\n", (BIT(clk->pin) | BIT(mosi->pin)), (cpol << clk->pin));
+	// DEBUG END
+
 	pio_sm_set_consecutive_pindirs(data->pio, sm, miso->pin, 1, false);
-	pio_sm_set_pins_with_mask(data->pio, sm, cpol, BIT(clk->pin));
-	pio_sm_set_pins_with_mask(data->pio, sm, 0, BIT(mosi->pin));
 	pio_sm_set_pindirs_with_mask(data->pio, sm, (BIT(clk->pin) | BIT(mosi->pin)), (BIT(clk->pin) | BIT(mosi->pin)));
+	pio_sm_set_pins_with_mask(data->pio, sm, (cpol << clk->pin), BIT(clk->pin) | BIT(mosi->pin));
+    pio_gpio_init(data->pio, mosi->pin);
+    pio_gpio_init(data->pio, miso->pin);
+    pio_gpio_init(data->pio, clk->pin);
 
 	pio_sm_init(data->pio, sm, offset, &sm_config);
 	pio_sm_set_enabled(data->pio, sm, true);
 
 	data->spi_ctx.config = spi_cfg;
+
+	// DEBUG
+	printk("PIO SPI device configured\n");
+	// DEBUG END
 
 	return 0;
 }
@@ -241,6 +272,10 @@ static void spi_pico_pio_txrx(const struct device *dev)
 	data->tx_count = 0;
 	data->rx_count = 0;
 
+	// DEBUG
+	printk("spi_pico_pio_txrx() called\n");
+	// DEBUG END
+
 	pio_sm_clear_fifos(data->pio, data->pio_sm);
 
 	while (data->rx_count < chunk_len || data->tx_count < chunk_len) {
@@ -253,15 +288,28 @@ static void spi_pico_pio_txrx(const struct device *dev)
 
 			if (txbuf) {
 				txrx = ((uint8_t *)txbuf)[data->tx_count];
+
+				// DEBUG
+				printk("  writing %d (0x%X)\n", txrx, txrx);
+				// DEBUG END
 			}
 			pio_sm_put(data->pio, data->pio_sm, txrx);
 			data->tx_count++;
 			fifo_cnt++;
 		}
+
+		// DEBUG
+		printk("  data->tx_count=%d, fifo_cnt=%d\n", data->tx_count, fifo_cnt);
+		// DEBUG END
+
 		while ((!pio_sm_is_rx_fifo_empty(data->pio, data->pio_sm))
 				&& data->rx_count < chunk_len
 				&& fifo_cnt > 0) {
 			txrx = pio_sm_get(data->pio, data->pio_sm);
+
+			// DEBUG
+			printk("  read %d (0x%X)\n", txrx, txrx);
+			// DEBUG END
 
 			/* Discard received data if rx buffer not assigned */
 			if (rxbuf) {
@@ -270,6 +318,10 @@ static void spi_pico_pio_txrx(const struct device *dev)
 			data->rx_count++;
 			fifo_cnt--;
 		}
+
+		// DEBUG
+		printk("  data->rx_count=%d, fifo_cnt=%d\n", data->rx_count, fifo_cnt);
+		// DEBUG END
 	}
 }
 
@@ -286,6 +338,10 @@ static int spi_pico_pio_transceive_impl(const struct device *dev,
 	struct spi_context *spi_ctx = &data->spi_ctx;
 	int rc;
 
+	// DEBUG
+	printk("spi_pico_pio_transceive_impl() called\n");
+	// DEBUG END
+
 	spi_context_lock(spi_ctx, asynchronous, cb, userdata, spi_cfg);
 
 	rc = spi_pico_pio_configure(dev_cfg, data, spi_cfg);
@@ -296,6 +352,10 @@ static int spi_pico_pio_transceive_impl(const struct device *dev,
 	spi_context_buffers_setup(spi_ctx, tx_bufs, rx_bufs, data->dfs);
 
 	/* Set initial clock state before asserting CS */
+	// DEBUG
+	printk("data->cpol=%d\n", data->cpol);
+	printk("Enable CS\n");
+	// DEBUG END
 	gpio_pin_set_dt(&dev_cfg->clk_gpio, data->cpol);
 
 	spi_context_cs_control(spi_ctx, true);
@@ -306,6 +366,9 @@ static int spi_pico_pio_transceive_impl(const struct device *dev,
 		spi_context_update_rx(spi_ctx, 1, data->rx_count);
 	} while (spi_pico_pio_transfer_ongoing(data));
 
+	// DEBUG
+	printk("Disable CS\n");
+	// DEBUG END
 	spi_context_cs_control(spi_ctx, false);
 
 	/* Set idle clock state after de-asserting CS */
@@ -321,6 +384,12 @@ static int spi_pico_pio_transceive(const struct device *dev,
 				const struct spi_buf_set *tx_bufs,
 				const struct spi_buf_set *rx_bufs)
 {
+
+	// DEBUG
+	printk("spi_pico_pio_transceive() called: bufs:  tx=%d, rx=%d\n",
+		tx_bufs->count, rx_bufs->count);
+	// DEBUG END
+
 	// TODO:  Add interrupt support
 	// TODO:  Add DMA support
 	// TODO:  Ponder adding async operation
@@ -372,13 +441,13 @@ int spi_pico_pio_init(const struct device *dev)
 		return rc;
 	}
 
-	rc = config_gpio(&dev_cfg->clk_gpio, "clk", GPIO_OUTPUT_INACTIVE);
+	rc = config_gpio(&dev_cfg->clk_gpio, "clk", GPIO_OUTPUT_ACTIVE);
 	if (rc < 0) {
 		return rc;
 	}
 
 	if (dev_cfg->mosi_gpio.port != NULL) {
-		rc = config_gpio(&dev_cfg->mosi_gpio, "mosi", GPIO_OUTPUT_INACTIVE);
+		rc = config_gpio(&dev_cfg->mosi_gpio, "mosi", GPIO_OUTPUT);
 		if (rc < 0) {
 			return rc;
 		}
