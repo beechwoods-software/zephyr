@@ -181,6 +181,15 @@ static const struct uart_driver_api pio_uart_driver_api = {
 	.poll_out = pio_uart_poll_out,
 };
 
+// DEBUG
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#pragma message "BW_DEBUG:  piodev = " STR( (DEVICE_DT_GET(DT_INST_PARENT(0))) )
+#pragma message "BW_DEBUG:  pcfg = " STR(PINCTRL_DT_INST_DEV_CONFIG_GET(0))
+#pragma message "BW_DEBUG:  tx_pin = " STR( (DT_INST_RPI_PICO_PIO_PIN_BY_NAME(0, default, 0, tx_pins, 0)) )
+#pragma message "BW_DEBUG:  rx_pin = " STR( (DT_INST_RPI_PICO_PIO_PIN_BY_NAME(0, default, 0, rx_pins, 0)) )
+// DEBUG END
+
 #define PIO_UART_INIT(idx)									\
 	PINCTRL_DT_INST_DEFINE(idx);								\
 	static const struct pio_uart_config pio_uart##idx##_config = {				\
