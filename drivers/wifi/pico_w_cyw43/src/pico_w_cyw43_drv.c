@@ -7,6 +7,8 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
 
+#include <zephyr/drivers/spi.h>
+
 #include "pico_w_cyw43_drv.h"
 
 #if defined(CONFIG_BUILD_WITH_PICOWI)
@@ -23,10 +25,9 @@
 #else
 #include "georgerobotics/cyw43.h"
 #include "georgerobotics/cyw43_country.h"
-#define CYW43_GPIO_IRQ_HANDLER_PRIORITY 0x40
 #endif // CONFIG_BUILD_WITH_PICOWI
 
-#define DT_DRV_COMPAT pico_w_cyw43
+#define DT_DRV_COMPAT infineon_cyw43
 
 #include "pico_w_cyw43_log.h"
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
@@ -35,21 +36,24 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 K_KERNEL_STACK_DEFINE(pico_w_cyw43_work_q_stack, PICOWCYW43_WORKQUEUE_STACK_SIZE);
 
 static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
-      	.data = NULL,
+#if 0  
+        .data = NULL,
         .clock = NULL,
 	.power = NULL,
-	.irq_gpio = NULL//= GPIO_DT_SPEC_INST_GET(0, mosi_gpios),
+#endif
+	.irq_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(cyw43_int), gpios),
 };
 
 
+
+static struct pico_w_cyw43_dev pico_w_cyw43_0; /* static instance */
+
+#if defined(CONFIG_BUILD_WITH_PICOWI)  
 #define EVENT_POLL_THREAD_STACK_SIZE 1024
 #define EVENT_POLL_THREAD_PRIO 2
 K_KERNEL_STACK_MEMBER(pico_w_cyw43_event_poll_stack, EVENT_POLL_THREAD_STACK_SIZE);
 
 struct k_thread event_thread;
-
-static struct pico_w_cyw43_dev pico_w_cyw43_0; /* static instance */
-
 static void pico_w_cyw43_event_poll_thread(void *p1)
 {
 	struct pico_w_cyw43_dev *pico_w_cyw43 = p1;
@@ -64,33 +68,21 @@ static void pico_w_cyw43_event_poll_thread(void *p1)
 	while (1) {
 	  //if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
 	    pico_w_cyw43_lock(pico_w_cyw43);
-#if defined(CONFIG_BUILD_WITH_PICOWI)	    
+
 	    if (event_poll() < 0) {
 	      printf("event_poll() returns < 0\n");
 	      //printf("Total time %lu msec\n", ustime()/1000);
 	    }
 	    //}
-#else
-	    if (cyw43_poll) {
-	      cyw43_poll();
-	    }
-#endif // CONFIG_BUILD_WITH_PICOWI
 	    pico_w_cyw43_unlock(pico_w_cyw43);
 	    k_sleep(K_MSEC(10));
 	}
 	
 }
-
+#endif
 
 static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
-{
-	char *data;
-	int i, ret;
-
-	uint32_t led_ticks, poll_ticks;
-	bool ledon =false;
-
-	
+{	
 	LOG_DBG("");
 
 	pico_w_cyw43_lock(pico_w_cyw43);
@@ -98,6 +90,11 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 	printf("Scanning for wifi networks.\n");
 
 #if defined(CONFIG_BUILD_WITH_PICOWI)	
+	char *data;
+	int i, ret;
+
+	uint32_t led_ticks, poll_ticks;
+
 	if (!scan_start()) {
 	  printf("Error: can't start scan\n");
 	  pico_w_cyw43->scan_cb(pico_w_cyw43->iface, -EIO, NULL);
@@ -118,12 +115,13 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43)
 
 static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 {
-    uint32_t led_ticks, poll_ticks;
-    bool ledon=false;
 
 	printf("Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_lock(pico_w_cyw43);
-#if defined(CONFIG_BUILD_WITH_PICOWI)    
+
+#if defined(CONFIG_BUILD_WITH_PICOWI)
+    uint32_t led_ticks, poll_ticks;
+    bool ledon=false;
     add_event_handler(my_join_event_handler);
     add_event_handler(join_event_handler);
 
@@ -156,19 +154,18 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 #endif
 	printf("Done Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_unlock(pico_w_cyw43);
+	return 0;
 }
 
 static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
 {
-	struct in_addr addr;
-	int err;
-
 	LOG_DBG("Disconnecting from %s", pico_w_cyw43->sta.ssid);
 
 	pico_w_cyw43_lock(pico_w_cyw43);
 #if defined(CONFIG_BUILD_WITH_PICOWI)
 	join_stop();
 #endif // CONFIG_BUILD_WITH_PICOWI
+        if (false) { goto error; }
 	LOG_DBG("Disconnected!");
 
 	pico_w_cyw43_unlock(pico_w_cyw43);
@@ -183,10 +180,6 @@ static void pico_w_cyw43_status_work(struct k_work *work)
 {
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct pico_w_cyw43_dev *pico_w_cyw43;
-	char status[] = "CS\r";
-	char rssi[] = "CR\r";
-	char *rsp;
-	int ret;
 	
 	pico_w_cyw43 = CONTAINER_OF(dwork, struct pico_w_cyw43_dev, status_work);
 
@@ -372,31 +365,31 @@ void cyw43_cb_tcpip_deinit(cyw43_t *self, int itf)
 
 void cyw43_cb_process_ethernet(void *cb_data, int itf, size_t len, const uint8_t *buf)
 {
-  printf("Calling cyw43_cb_process_ethernet(itf=%d)\n");
+  printf("Calling cyw43_cb_process_ethernet(itf=%d)\n", itf);
   return;
 }
 
 void cyw43_hal_generate_laa_mac(int idx, uint8_t buf[6])
 {
-  printf("cyw43_hal_generate_laa_mac(idx=%d)\n");
+  printf("cyw43_hal_generate_laa_mac(idx=%d)\n", idx);
   return;
 }
 
 void cyw43_cb_tcpip_init(cyw43_t *self, int itf)
 {
-  printf("cyw43_cb_tcpip_init(itf=%d)\n");
+  printf("cyw43_cb_tcpip_init(itf=%d)\n", itf);
   return;
 }
 
 void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf)
 {
-  printf("Calling cyw43_cb_tcpip_set_link_up(itf=%d)\n");
+  printf("Calling cyw43_cb_tcpip_set_link_up(itf=%d)\n", itf);
   return;
 }
 
 void cyw43_cb_tcpip_set_link_down(cyw43_t *self, int itf)
 {
-  printf("Calling cyw43_cb_tcpip_set_link_down(itf=%d)\n");
+  printf("Calling cyw43_cb_tcpip_set_link_down(itf=%d)\n", itf);
   return;
 }
 
@@ -409,23 +402,10 @@ void cyw43_schedule_internal_poll_dispatch(void (*func)(void)) {
 static void cyw43_set_irq_enabled(bool enabled)
 {
   printf("Calling cyw43_set_irq_enabled(%s)\n", (enabled ? "true" : "false"));
-  // ******   Probably should use the Zephyr rather than Pico SDK version of this *******//
-  gpio_set_irq_enabled(CYW43_PIN_WL_HOST_WAKE, GPIO_IRQ_LEVEL_HIGH, enabled);
+
+  gpio_pin_interrupt_configure(pico_w_cyw43_cfg.irq_gpio.port, PICOWCYW43_GPIO_INTERRUPT_PIN, (enabled?(GPIO_INT_ENABLE|GPIO_INT_LEVEL_HIGH):GPIO_INT_DISABLE));
 }
 
-#if 0
-static void cyw43_gpio_irq_handler(void)
-{
-    uint32_t events = gpio_get_irq_event_mask(CYW43_PIN_WL_HOST_WAKE);
-    if (events & GPIO_IRQ_LEVEL_HIGH) {
-        // As we use a high level interrupt, it will go off forever until it's serviced
-        // So disable the interrupt until this is done. It's re-enabled again by CYW43_POST_POLL_HOOK
-        // which is called at the end of cyw43_poll_func
-        cyw43_set_irq_enabled(false);
-        //async_context_set_work_pending(cyw43_async_context, &cyw43_poll_worker);
-    }
-}
-#endif
 
 void cyw43_post_poll_hook(void)
 {
@@ -446,67 +426,101 @@ void cyw43_thread_exit(void)
 }
 
 void cyw43_delay_ms(uint32_t ms) {
-  k_sleep(K_MSEC(ms));
+  if (ms > 1000) {
+    printf("warning, calling cyw43_delay_ms() with value %d\n", ms); 
+  }
+  //k_sleep(K_MSEC(ms));
+  k_busy_wait(ms * 1000);
 }
 
 void sleep_ms(uint32_t ms) {
+  if (ms > 1000) {
+    printf("warning, calling cyw43_delay_ms() with value %d\n", ms); 
+  }
+
   k_sleep(K_MSEC(ms));
 }
 
 void cyw43_delay_us(uint32_t us) {
-  k_sleep(K_MSEC(us*1000));
+  if (us > 1000) {
+    printf("warning, calling cyw43_delay_ms() with value %d\n", us); 
+  }
+
+  //k_sleep(K_MSEC(us*1000));
+  k_busy_wait(us);
 }
 
 void cyw43_await_background_or_timeout_us(uint32_t timeout_us) {
-  k_sleep(K_MSEC(timeout_us*1000));
+  if (timeout_us > 1000) {
+    printf("warning, calling cyw43_delay_ms() with value %d\n", timeout_us); 
+  }
+
+  //k_sleep(K_MSEC(timeout_us*1000));
+  k_busy_wait(timeout_us);
 }
 
 #endif // CONFIG_BUILD_WITH_PICOWI
 
 struct gpio_callback pico_w_cyw43_gpio_cb;
 
-static int pico_w_cyw43_isr(const struct device *port,
+static void pico_w_cyw43_isr(const struct device *port,
 			    struct gpio_callback *cb,
 			    gpio_port_pins_t pins)
 {
   printf("Calling pico_w_cyw43_isr\n");
+
+#if defined(CONFIG_BUILD_WITH_PICOWI)
+  if (event_poll() < 0) {
+    printf("event_poll() returns < 0\n");
+  }
+    
+#else
+
+  // TODO: Should really find the Zephyr equivalent of gpio_get_irq_event_mask
+  uint32_t events = gpio_get_irq_event_mask(PICOWCYW43_GPIO_INTERRUPT_PIN);
+  if (events & GPIO_IRQ_LEVEL_HIGH) { 
+    cyw43_set_irq_enabled(false);
+  }
+  
+  //Schedule the rest of the work to be done
+  if (cyw43_poll) {
+    printf("Calling cyw43_poll()\n");
+    cyw43_poll();
+  }
+  else {
+    printf("Not calling cyw43_poll(), because it doesn't exist.\n");
+  }
+#endif
 }
 
-static void pico_w_cyw43_register_isr(const struct device *port)
+
+static void pico_w_cyw43_register_cb()
 {
   int rv;
-  
+ 
   //Note that this is technically a gpio_callback, not a true isr
   gpio_init_callback(&pico_w_cyw43_gpio_cb,
 		     pico_w_cyw43_isr,
-		     BIT(24/*pico_w_cyw43_cfg.irq_gpio.pin*/));
+		     BIT(pico_w_cyw43_cfg.irq_gpio.pin));
 
-  rv = gpio_add_callback(port/*pico_w_cyw43_cfg.irq_gpio.port*/, &pico_w_cyw43_gpio_cb);
+  rv = gpio_add_callback(pico_w_cyw43_cfg.irq_gpio.port, &pico_w_cyw43_gpio_cb);
 
   printf("gpio_add_callback() returned %d\n", rv);
   
-  rv = gpio_pin_interrupt_configure(port/*pico_w_cyw43_cfg.irq_gpio.port*/, 24, GPIO_INT_EDGE_TO_ACTIVE);
-
-  printf("gpio_pin_interrupt_configure(() returned %d\n", rv);
+  cyw43_set_irq_enabled(true);
 }
 
 
 static int pico_w_cyw43_init(const struct device *dev)
 {
   struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
-  const struct pico_w_cyw43_cfg *cfg = dev->config;
-
   
   LOG_DBG("");
 
   k_mutex_init(&pico_w_cyw43->mutex);
 
-  //picw_w_cyw43_print_tasks();
-  
   pico_w_cyw43->role = PICOWCYW43_ROLE_CLIENT;
     
-  //k_msleep(1000);
-  //k_msleep(10000);
   
 #if defined(CONFIG_BUILD_WITH_PICOWI)  
   add_event_handler(scan_event_handler);
@@ -520,42 +534,34 @@ static int pico_w_cyw43_init(const struct device *dev)
     return -ENODEV;
   }
   printf("Made it through wifi_setup()\n");
+
+  k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
+		  EVENT_POLL_THREAD_STACK_SIZE,
+		  (k_thread_entry_t)pico_w_cyw43_event_poll_thread, pico_w_cyw43, NULL,
+		  NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
+		  K_NO_WAIT);    
 #else
-    /* event handling thread */
 
   cyw43_init(&cyw43_state);
   // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c:cyw43_driver_init() IRQ setup happens next
-  
-  pico_w_cyw43_register_isr(dev);
 
-  /* If I try to enable irq this way, everything hangs (maybe because I'm using the rpi SDK
-  // gpio_set_irq_enabled() routine in cyw43_set_irq_enabled() rather than Zephyr GPIO API? */
-  // cyw43_set_irq_enabled(true);
+  pico_w_cyw43_register_cb();
 
-  
-#if 0
-    k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
-		    EVENT_POLL_THREAD_STACK_SIZE,
-		    (k_thread_entry_t)pico_w_cyw43_event_poll_thread, pico_w_cyw43, NULL,
-		    NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
-		    K_NO_WAIT);
-#endif    
+  cyw43_set_irq_enabled(true);
 
   cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
-  return 0;
+
 
 #endif // CONFIG_BUILD_WITH_PICOWI
   
-    //picw_w_cyw43_print_tasks();
-    
     k_work_queue_start(&pico_w_cyw43->work_q, pico_w_cyw43_work_q_stack,
 		       K_KERNEL_STACK_SIZEOF(pico_w_cyw43_work_q_stack),
 		       CONFIG_SYSTEM_WORKQUEUE_PRIORITY - 1, NULL);
-    
+   
     k_work_init(&pico_w_cyw43->request_work, pico_w_cyw43_request_work);
     k_work_init_delayable(&pico_w_cyw43->status_work, pico_w_cyw43_status_work);
 
-    //k_sleep(K_MSEC(100));
+
     //wifi_set_led(true);
     
     pico_w_cyw43_shell_register(pico_w_cyw43);
@@ -574,19 +580,11 @@ static const struct net_wifi_mgmt_offload pico_w_cyw43_callbacks = {
 	.iface_status		   = pico_w_cyw43_iface_status, 
 };
 
-#if 1
-NET_DEVICE_OFFLOAD_INIT(pico_w_cyw43_0, "pico_w_cyw43", pico_w_cyw43_init, NULL,
-			&pico_w_cyw43_0, NULL,
-			CONFIG_WIFI_INIT_PRIORITY,
-			&pico_w_cyw43_callbacks,
-			1500);
-#else
 NET_DEVICE_DT_INST_OFFLOAD_DEFINE(0, pico_w_cyw43_init, NULL,
 				  &pico_w_cyw43_0, &pico_w_cyw43_cfg,
 				  CONFIG_WIFI_INIT_PRIORITY,
 				  &pico_w_cyw43_callbacks,
 				  1500);
-#endif
 
 
 

@@ -14,6 +14,7 @@
 #include "pico_w_cyw43_offload.h"
 
 #define MAX_DATA_SIZE 1600
+#define PICOWCYW43_GPIO_INTERRUPT_PIN 24
 
 enum pico_w_cyw43_security_type {
 	PICOWCYW43_SEC_OPEN,
@@ -104,4 +105,3 @@ void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev *dev);
 #define pico_w_cyw43_shell_register(dev)
 #endif
 
-void picw_w_cyw43_print_tasks(void);

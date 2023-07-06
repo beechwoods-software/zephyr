@@ -23,52 +23,32 @@
 extern "C" {
 #endif
 
-#ifndef CYW43_HOST_NAME
 #define CYW43_HOST_NAME "PicoW"
-#endif
 
 #define CYW43_LWIP (0) 
   
-#ifndef CYW43_GPIO
 #define CYW43_GPIO 1
-#endif
 
-#ifndef CYW43_LOGIC_DEBUG
-#define CYW43_LOGIC_DEBUG 0
-#endif
+//#define CYW43_LOGIC_DEBUG 0
+#define CYW43_LOGIC_DEBUG 1
 
-#ifndef CYW43_USE_OTP_MAC
 #define CYW43_USE_OTP_MAC 1
-#endif
 
-#ifndef CYW43_NO_NETUTILS
 #define CYW43_NO_NETUTILS 1
-#endif
 
-#ifndef CYW43_IOCTL_TIMEOUT_US
-#define CYW43_IOCTL_TIMEOUT_US 1000000
-#endif
+//#define CYW43_IOCTL_TIMEOUT_US 1000000
+#define CYW43_IOCTL_TIMEOUT_US 10000000
 
-#ifndef CYW43_USE_STATS
 #define CYW43_USE_STATS 0
-#endif
 
 // todo should this be user settable?
-#ifndef CYW43_HAL_MAC_WLAN0
 #define CYW43_HAL_MAC_WLAN0 0
-#endif
 
-#ifndef STATIC
 #define STATIC static
-#endif
 
-#ifndef CYW43_USE_SPI
 #define CYW43_USE_SPI 1
-#endif
 
-#ifndef CYW43_SPI_PIO
 #define CYW43_SPI_PIO 1
-#endif
 
 #ifndef CYW43_CHIPSET_FIRMWARE_INCLUDE_FILE
 #if CYW43_ENABLE_BLUETOOTH
@@ -78,14 +58,12 @@ extern "C" {
 #endif
 #endif
 
-#ifndef CYW43_WIFI_NVRAM_INCLUDE_FILE
 #define CYW43_WIFI_NVRAM_INCLUDE_FILE "wifi_nvram_43439.h"
-#endif
 
 // Note, these are negated, because cyw43_driver negates them before returning!
 #define CYW43_EPERM            (-PICO_ERROR_NOT_PERMITTED) // Operation not permitted
 #define CYW43_EIO              (-PICO_ERROR_IO) // I/O error
-#define CYW43_EINVAL           (-PICO_ERROR_INVALID_ARG) // Invalid argument
+#define CYW43_EINVAL           -5 // Invalid argument
 #define CYW43_ETIMEDOUT        (-PICO_ERROR_TIMEOUT) // Connection timed out
 
 #define CYW43_NUM_GPIOS        CYW43_WL_GPIO_COUNT
