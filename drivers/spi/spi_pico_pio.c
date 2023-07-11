@@ -36,6 +36,8 @@ struct spi_pico_pio_data {
 	uint32_t tx_count;
 	uint32_t rx_count;
 	int cpol;
+	int cpha;
+	bool loop;
 	PIO pio;
 	size_t pio_sm;
 	int bits;
@@ -74,6 +76,24 @@ static inline bool spi_pico_pio_transfer_ongoing(struct spi_pico_pio_data *data)
 	return spi_context_tx_on(&data->spi_ctx) || spi_context_rx_on(&data->spi_ctx);
 }
 
+// TODO:  Add support for 16- and 32-bit writes
+static inline void spi_pico_pio_sm_put8(PIO pio, uint sm, uint8_t data) {
+    // Do 8 bit accesses on FIFO, so that write data is byte-replicated. This
+    // gets us the left-justification for free (for MSB-first shift-out)
+    io_rw_8 *txfifo = (io_rw_8 *) &pio->txf[sm];
+
+	*txfifo = data;
+}
+
+// TODO:  Add support for 16- and 32-bit reads
+static inline uint8_t spi_pico_pio_sm_get8(PIO pio, uint sm) {
+    // Do 8 bit accesses on FIFO, so that write data is byte-replicated. This
+    // gets us the left-justification for free (for MSB-first shift-out)
+    io_rw_8 *rxfifo = (io_rw_8 *) &pio->rxf[sm];
+
+	return *rxfifo;
+}
+
 static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 			    struct spi_pico_pio_data *data,
 			    const struct spi_config *spi_cfg)
@@ -81,11 +101,7 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	const struct gpio_dt_spec *miso = NULL;
 	const struct gpio_dt_spec *mosi = NULL;
 	const struct gpio_dt_spec *clk = NULL;
-	int cpol = 0;
-	int cpha = 0;
-	bool loop = false;
 	pio_sm_config sm_config;
-	size_t sm;
 	uint32_t offset;
 	uint32_t wrap_target;
 	uint32_t wrap;
@@ -97,6 +113,8 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	printk("spi_cfg->operation=0x%X\n", spi_cfg->operation);
 	// DEBUG END
 
+	printk("&data->spi_ctx=%p, (&data->spi_ctx)->config=%p, spi_cfg=%p\n",
+		&data->spi_ctx, (&data->spi_ctx)->config, spi_cfg);
 	if (spi_context_configured(&data->spi_ctx, spi_cfg)) {
 		return 0;
 	}
@@ -143,18 +161,18 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	}
 
 	if (SPI_MODE_GET(spi_cfg->operation) & SPI_MODE_CPOL) {
-		cpol = 1;
+		data->cpol = 1;
 	}
 	if (SPI_MODE_GET(spi_cfg->operation) & SPI_MODE_CPHA) {
-		cpha = 1;
+		data->cpha = 1;
 	}
 	if (SPI_MODE_GET(spi_cfg->operation) & SPI_MODE_LOOP) {
-		loop = true;
+		data->loop = true;
 	}
 
 	// DEBUG
 	printk("data->bits=%d, data->dfs=%d\n", data->bits, data->dfs);
-	printk("cpol=%d, cpha=%d, loop=%s\n", cpol, cpha, (loop ? "true" : "false"));
+	printk("cpol=%d, cpha=%d, loop=%s\n", data->cpol, data->cpha, (data->loop ? "true" : "false"));
 	// DEBUG END
 
 	if (dev_cfg->mosi_gpio.port) {
@@ -196,15 +214,15 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	printk("data->pio=%p\n", data->pio);
 	// DEBUG END
 
-	rc = pio_rpi_pico_allocate_sm(dev_cfg->piodev, &sm);
+	rc = pio_rpi_pico_allocate_sm(dev_cfg->piodev, &data->pio_sm);
 	// DEBUG
-	printk("sm=%d\n", sm);
+	printk("data->pio_sm=%d\n", data->pio_sm);
 	// DEBUG END
 	if (rc < 0) {
 		return rc;
 	}
 
-	if (cpol == cpha) {
+	if (data->cpol == data->cpha) {
 		program = RPI_PICO_PIO_GET_PROGRAM(spi_input_on_rise);
 		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_input_on_rise);
 		wrap = RPI_PICO_PIO_GET_WRAP(spi_input_on_rise);
@@ -238,18 +256,18 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	// DEBUG
 	printk("sm_config.clkdiv=0x%X, sm_config.execctrl=0x%X, sm_config.pinctrl=0x%X, sm_config.shiftctrl=0x%X\n",
 		sm_config.clkdiv, sm_config.execctrl, sm_config.pinctrl, sm_config.shiftctrl);
-	printk("pindirs: 0x%lX, pinval0x%X\n", (BIT(clk->pin) | BIT(mosi->pin)), (cpol << clk->pin));
+	printk("pindirs: 0x%lX, pinval0x%X\n", (BIT(clk->pin) | BIT(mosi->pin)), (data->cpol << clk->pin));
 	// DEBUG END
 
-	pio_sm_set_consecutive_pindirs(data->pio, sm, miso->pin, 1, false);
-	pio_sm_set_pindirs_with_mask(data->pio, sm, (BIT(clk->pin) | BIT(mosi->pin)), (BIT(clk->pin) | BIT(mosi->pin)));
-	pio_sm_set_pins_with_mask(data->pio, sm, (cpol << clk->pin), BIT(clk->pin) | BIT(mosi->pin));
+	pio_sm_set_consecutive_pindirs(data->pio, data->pio_sm, miso->pin, 1, false);
+	pio_sm_set_pindirs_with_mask(data->pio, data->pio_sm, (BIT(clk->pin) | BIT(mosi->pin)), (BIT(clk->pin) | BIT(mosi->pin)));
+	pio_sm_set_pins_with_mask(data->pio, data->pio_sm, (data->cpol << clk->pin), BIT(clk->pin) | BIT(mosi->pin));
     pio_gpio_init(data->pio, mosi->pin);
     pio_gpio_init(data->pio, miso->pin);
     pio_gpio_init(data->pio, clk->pin);
 
-	pio_sm_init(data->pio, sm, offset, &sm_config);
-	pio_sm_set_enabled(data->pio, sm, true);
+	pio_sm_init(data->pio, data->pio_sm, offset, &sm_config);
+	pio_sm_set_enabled(data->pio, data->pio_sm, true);
 
 	data->spi_ctx.config = spi_cfg;
 
@@ -274,6 +292,7 @@ static void spi_pico_pio_txrx(const struct device *dev)
 
 	// DEBUG
 	printk("spi_pico_pio_txrx() called\n");
+	printk("  data->pio=%p, data->pio_sm=%d\n", data->pio, data->pio_sm);
 	// DEBUG END
 
 	pio_sm_clear_fifos(data->pio, data->pio_sm);
@@ -293,7 +312,7 @@ static void spi_pico_pio_txrx(const struct device *dev)
 				printk("  writing %d (0x%X)\n", txrx, txrx);
 				// DEBUG END
 			}
-			pio_sm_put(data->pio, data->pio_sm, txrx);
+			spi_pico_pio_sm_put8(data->pio, data->pio_sm, txrx);
 			data->tx_count++;
 			fifo_cnt++;
 		}
@@ -305,7 +324,7 @@ static void spi_pico_pio_txrx(const struct device *dev)
 		while ((!pio_sm_is_rx_fifo_empty(data->pio, data->pio_sm))
 				&& data->rx_count < chunk_len
 				&& fifo_cnt > 0) {
-			txrx = pio_sm_get(data->pio, data->pio_sm);
+			txrx = spi_pico_pio_sm_get8(data->pio, data->pio_sm);
 
 			// DEBUG
 			printk("  read %d (0x%X)\n", txrx, txrx);
