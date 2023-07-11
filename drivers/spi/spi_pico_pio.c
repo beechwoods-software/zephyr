@@ -20,7 +20,7 @@ LOG_MODULE_REGISTER(spi_pico_pio);
 #include <hardware/pio.h>
 #include "hardware/clocks.h"
 
-#define PIO_CYCLES		(2)
+#define PIO_CYCLES		(4)
 #define PIO_FIFO_DEPTH	(4)
 
 struct spi_pico_pio_config {
@@ -45,17 +45,18 @@ struct spi_pico_pio_data {
 	bool half_duplex;
 };
 
-RPI_PICO_PIO_DEFINE_PROGRAM(spi_input_on_rise, 0, 1,
+RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_0_cpha_0, 0, 1,
             //     .wrap_target
-    0x6001, //  0: out    pins, 1         side 0     
-    0x5001, //  1: in     pins, 1         side 1     
+    0x6101, //  0: out    pins, 1         side 0 [1] 
+    0x5101, //  1: in     pins, 1         side 1 [1] 
             //     .wrap
 );
 
-RPI_PICO_PIO_DEFINE_PROGRAM(spi_input_on_fall, 0, 1,
+RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_1_cpha_1, 0, 2,
             //     .wrap_target
-    0x7001, //  0: out    pins, 1         side 1     
-    0x4001, //  1: in     pins, 1         side 0     
+    0x7021, //  0: out    x, 1            side 1     
+    0xa101, //  1: mov    pins, x         side 0 [1] 
+    0x5001, //  2: in     pins, 1         side 1     
             //     .wrap
 );
 
@@ -222,14 +223,17 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 		return rc;
 	}
 
-	if (data->cpol == data->cpha) {
-		program = RPI_PICO_PIO_GET_PROGRAM(spi_input_on_rise);
-		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_input_on_rise);
-		wrap = RPI_PICO_PIO_GET_WRAP(spi_input_on_rise);
+	if ((data->cpol == 0) && (data->cpha == 0)) {
+		program = RPI_PICO_PIO_GET_PROGRAM(spi_cpol_0_cpha_0);
+		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_cpol_0_cpha_0);
+		wrap = RPI_PICO_PIO_GET_WRAP(spi_cpol_0_cpha_0);
+	} else if ((data->cpol == 1) && (data->cpha == 1)) {
+		program = RPI_PICO_PIO_GET_PROGRAM(spi_cpol_1_cpha_1);
+		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_cpol_1_cpha_1);
+		wrap = RPI_PICO_PIO_GET_WRAP(spi_cpol_1_cpha_1);
 	} else {
-		program = RPI_PICO_PIO_GET_PROGRAM(spi_input_on_fall);
-		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_input_on_fall);
-		wrap = RPI_PICO_PIO_GET_WRAP(spi_input_on_fall);
+		printk("Not supported:  cpol=%d, cpha=%d\n", data->cpol, data->cpha);
+		return -ENOTSUP;
 	}
 
 	if (!pio_can_add_program(data->pio, program)) {
