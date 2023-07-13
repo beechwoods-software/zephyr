@@ -312,21 +312,6 @@ static int spi_pico_pio_transceive(const struct device *dev,
 				const struct spi_buf_set *tx_bufs,
 				const struct spi_buf_set *rx_bufs)
 {
-
-	// DEBUG
-	printk("spi_pico_pio_transceive() called\n");
-	if (tx_bufs != 0) {
-		printk("  tx_bufs=%p, count=%d\n", tx_bufs, tx_bufs->count);
-	} else {
-		printk("  No tx_bufs\n");
-	}
-	if (rx_bufs != 0) {
-		printk("  rx_bufs=%p, count=%d\n", rx_bufs, rx_bufs->count);
-	} else {
-		printk("  No rx_bufs\n");
-	}
-	// DEBUG END
-
 	// TODO:  Add interrupt support
 	// TODO:  Add DMA support
 	// TODO:  Ponder adding async operation
