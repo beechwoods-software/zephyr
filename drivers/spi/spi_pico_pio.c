@@ -46,18 +46,18 @@ struct spi_pico_pio_data {
 };
 
 RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_0_cpha_0, 0, 1,
-			    //     .wrap_target
-			    0x6101, //  0: out    pins, 1         side 0 [1]
-			    0x5101, //  1: in     pins, 1         side 1 [1]
-				    //     .wrap
+			    /*     .wrap_target */
+			    0x6101, /*  0: out    pins, 1         side 0 [1] */
+			    0x5101, /*  1: in     pins, 1         side 1 [1] */
+				/*     .wrap */
 );
 
 RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_1_cpha_1, 0, 2,
-			    //     .wrap_target
-			    0x7021, //  0: out    x, 1            side 1
-			    0xa101, //  1: mov    pins, x         side 0 [1]
-			    0x5001, //  2: in     pins, 1         side 1
-				    //     .wrap
+			    /*     .wrap_target */
+			    0x7021, /*  0: out    x, 1            side 1 */
+			    0xa101, /*  1: mov    pins, x         side 0 [1] */
+			    0x5001, /*  2: in     pins, 1         side 1 */
+				/*     .wrap */
 );
 
 static float spi_pico_pio_clock_divisor(uint32_t spi_frequency)
@@ -65,12 +65,12 @@ static float spi_pico_pio_clock_divisor(uint32_t spi_frequency)
 	return (float)clock_get_hz(clk_sys) / (float)(PIO_CYCLES * spi_frequency);
 }
 
-static uint32_t spi_pico_pio_maximum_clock_frequency()
+static uint32_t spi_pico_pio_maximum_clock_frequency(void)
 {
 	return clock_get_hz(clk_sys) / PIO_CYCLES;
 }
 
-static uint32_t spi_pico_pio_minimum_clock_frequency()
+static uint32_t spi_pico_pio_minimum_clock_frequency(void)
 {
 	return clock_get_hz(clk_sys) / (PIO_CYCLES * 65536);
 }
@@ -80,21 +80,21 @@ static inline bool spi_pico_pio_transfer_ongoing(struct spi_pico_pio_data *data)
 	return spi_context_tx_on(&data->spi_ctx) || spi_context_rx_on(&data->spi_ctx);
 }
 
-// TODO:  Add support for 16- and 32-bit writes
+/* TODO:  Add support for 16- and 32-bit writes */
 static inline void spi_pico_pio_sm_put8(PIO pio, uint sm, uint8_t data)
 {
-	// Do 8 bit accesses on FIFO, so that write data is byte-replicated. This
-	// gets us the left-justification for free (for MSB-first shift-out)
+	/* Do 8 bit accesses on FIFO, so that write data is byte-replicated. This */
+	/* gets us the left-justification for free (for MSB-first shift-out) */
 	io_rw_8 *txfifo = (io_rw_8 *)&pio->txf[sm];
 
 	*txfifo = data;
 }
 
-// TODO:  Add support for 16- and 32-bit reads
+/* TODO:  Add support for 16- and 32-bit reads */
 static inline uint8_t spi_pico_pio_sm_get8(PIO pio, uint sm)
 {
-	// Do 8 bit accesses on FIFO, so that write data is byte-replicated. This
-	// gets us the left-justification for free (for MSB-first shift-out)
+	/* Do 8 bit accesses on FIFO, so that write data is byte-replicated. This */
+	/* gets us the left-justification for free (for MSB-first shift-out) */
 	io_rw_8 *rxfifo = (io_rw_8 *)&pio->rxf[sm];
 
 	return *rxfifo;
@@ -310,9 +310,9 @@ static int spi_pico_pio_transceive(const struct device *dev, const struct spi_co
 				   const struct spi_buf_set *tx_bufs,
 				   const struct spi_buf_set *rx_bufs)
 {
-	// TODO:  Add interrupt support
-	// TODO:  Add DMA support
-	// TODO:  Ponder adding async operation
+	/* TODO:  Add interrupt support */
+	/* TODO:  Add DMA support */
+	/* TODO:  Ponder adding async operation */
 	return spi_pico_pio_transceive_impl(dev, spi_cfg, tx_bufs, rx_bufs, false, NULL, NULL);
 }
 
