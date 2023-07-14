@@ -8,6 +8,7 @@
 #include <st/f0/stm32f030X8.dtsi>
 #include <st/f0/stm32f030r8tx-pinctrl.dtsi>
 #include "arduino_r3_connector.dtsi"
+#include "st_morpho_connector.dtsi"
 
 / {
 	model = "STMicroelectronics STM32F030R8-NUCLEO board";
@@ -41,6 +42,7 @@
 		sw0 = &user_button;
 		watchdog0 = &iwdg;
 		die-temp0 = &die_temp;
+		volt-sensor0 = &vref;
 	};
 };
 
@@ -122,5 +124,9 @@
 };
 
 &die_temp {
+	status = "okay";
+};
+
+&vref {
 	status = "okay";
 };

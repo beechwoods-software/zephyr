@@ -56,6 +56,8 @@
 		watchdog0 = &iwdg;
 		spi-flash0 = &mx25lm51245;
 		die-temp0 = &die_temp;
+		volt-sensor0 = &vref;
+		volt-sensor1 = &vbat;
 	};
 };
 
@@ -242,6 +244,20 @@
 	};
 };
 
+zephyr_udc0: &usb {
+	pinctrl-0 = <&usb_dm_pa11 &usb_dp_pa12>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
 &die_temp {
+	status = "okay";
+};
+
+&vref {
+	status = "okay";
+};
+
+&vbat {
 	status = "okay";
 };

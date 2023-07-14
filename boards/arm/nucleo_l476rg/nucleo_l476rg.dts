@@ -8,6 +8,7 @@
 #include <st/l4/stm32l476Xg.dtsi>
 #include <st/l4/stm32l476r(c-e-g)tx-pinctrl.dtsi>
 #include "arduino_r3_connector.dtsi"
+#include "st_morpho_connector.dtsi"
 
 / {
 	model = "STMicroelectronics STM32L476RG-NUCLEO board";
@@ -39,6 +40,8 @@
 	aliases {
 		led0 = &green_led_2;
 		sw0 = &user_button;
+		volt-sensor0 = &vref;
+		volt-sensor1 = &vbat;
 	};
 };
 
@@ -166,5 +169,13 @@
 &adc1 {
 	pinctrl-0 = <&adc1_in1_pc0>;
 	pinctrl-names = "default";
+	status = "okay";
+};
+
+&vref {
+	status = "okay";
+};
+
+&vbat {
 	status = "okay";
 };

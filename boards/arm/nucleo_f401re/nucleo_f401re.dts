@@ -9,6 +9,7 @@
 #include <st/f4/stm32f401Xe.dtsi>
 #include <st/f4/stm32f401r(d-e)tx-pinctrl.dtsi>
 #include "arduino_r3_connector.dtsi"
+#include "st_morpho_connector.dtsi"
 
 / {
 	model = "STMicroelectronics STM32F401RE-NUCLEO board";
@@ -51,6 +52,8 @@
 		pwm-led0 = &green_pwm_led;
 		watchdog0 = &wwdg;
 		die-temp0 = &die_temp;
+		volt-sensor0 = &vref;
+		volt-sensor1 = &vbat;
 	};
 };
 
@@ -176,5 +179,13 @@
 };
 
 &wwdg {
+	status = "okay";
+};
+
+&vref {
+	status = "okay";
+};
+
+&vbat {
 	status = "okay";
 };

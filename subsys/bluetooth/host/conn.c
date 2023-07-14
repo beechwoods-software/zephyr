@@ -13,6 +13,7 @@
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/check.h>
+#include <zephyr/sys/iterable_sections.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
 #include <zephyr/sys/slist.h>
@@ -1078,8 +1079,10 @@ void bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state)
 		    conn->role == BT_CONN_ROLE_PERIPHERAL) {
 
 #if defined(CONFIG_BT_GAP_AUTO_UPDATE_CONN_PARAMS)
-			conn->le.conn_param_retry_countdown =
-				CONFIG_BT_CONN_PARAM_RETRY_COUNT;
+			if (conn->type == BT_CONN_TYPE_LE) {
+				conn->le.conn_param_retry_countdown =
+					CONFIG_BT_CONN_PARAM_RETRY_COUNT;
+			}
 #endif /* CONFIG_BT_GAP_AUTO_UPDATE_CONN_PARAMS */
 
 			k_work_schedule(&conn->deferred_work,
@@ -1204,35 +1207,44 @@ void bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state)
 	}
 }
 
-struct bt_conn *bt_conn_lookup_handle(uint16_t handle)
+struct bt_conn *bt_conn_lookup_handle(uint16_t handle, enum bt_conn_type type)
 {
 	struct bt_conn *conn;
 
 #if defined(CONFIG_BT_CONN)
 	conn = conn_lookup_handle(acl_conns, ARRAY_SIZE(acl_conns), handle);
 	if (conn) {
-		return conn;
+		goto found;
 	}
 #endif /* CONFIG_BT_CONN */
 
 #if defined(CONFIG_BT_ISO)
 	conn = conn_lookup_handle(iso_conns, ARRAY_SIZE(iso_conns), handle);
 	if (conn) {
-		return conn;
+		goto found;
 	}
 #endif
 
- #if defined(CONFIG_BT_BREDR)
+#if defined(CONFIG_BT_BREDR)
 	conn = conn_lookup_handle(sco_conns, ARRAY_SIZE(sco_conns), handle);
 	if (conn) {
-		return conn;
+		goto found;
 	}
 #endif
 
+found:
+	if (conn) {
+		if (type & conn->type) {
+			return conn;
+		}
+		LOG_WRN("incompatible handle %u", handle);
+		bt_conn_unref(conn);
+	}
 	return NULL;
 }
 
-void bt_conn_foreach(int type, void (*func)(struct bt_conn *conn, void *data),
+void bt_conn_foreach(enum bt_conn_type type,
+		     void (*func)(struct bt_conn *conn, void *data),
 		     void *data)
 {
 	int i;
@@ -2546,6 +2558,8 @@ int bt_conn_get_info(const struct bt_conn *conn, struct bt_conn_info *info)
 		}
 		return 0;
 #endif
+	default:
+		break;
 	}
 
 	return -EINVAL;
@@ -3157,10 +3171,14 @@ int bt_conn_auth_cb_register(const struct bt_conn_auth_cb *cb)
 #if defined(CONFIG_BT_SMP)
 int bt_conn_auth_cb_overlay(struct bt_conn *conn, const struct bt_conn_auth_cb *cb)
 {
+	CHECKIF(conn == NULL) {
+		return -EINVAL;
+	}
+
 	/* The cancel callback must always be provided if the app provides
 	 * interactive callbacks.
 	 */
-	if (!cb->cancel &&
+	if (cb && !cb->cancel &&
 	    (cb->passkey_display || cb->passkey_entry || cb->passkey_confirm ||
 	     cb->pairing_confirm)) {
 		return -EINVAL;

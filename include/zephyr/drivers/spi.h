@@ -27,6 +27,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/rtio/rtio.h>
+#include <zephyr/stats/stats.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -121,7 +122,7 @@ extern "C" {
 /** @} */
 
 /**
- * @name SPI MISO lines (if @kconfig{CONFIG_SPI_EXTENDED_MODES} is enabled)
+ * @name SPI MISO lines
  * @{
  *
  * Some controllers support dual, quad or octal MISO lines connected to slaves.
@@ -255,7 +256,7 @@ struct spi_cs_control {
  * @brief Get a pointer to a @p spi_cs_control from a devicetree node
  *
  * This is equivalent to
- * <tt>SPI_CS_CONTROL_PTR_DT(DT_DRV_INST(inst), delay)</tt>.
+ * <tt>SPI_CS_CONTROL_INIT(DT_DRV_INST(inst), delay)</tt>.
  *
  * Therefore, @p DT_DRV_COMPAT must already be defined before using
  * this macro.
@@ -264,46 +265,52 @@ struct spi_cs_control {
  * @param delay_ The @p delay field to set in the @p spi_cs_control
  * @return a pointer to the @p spi_cs_control structure
  */
-#define SPI_CS_CONTROL_PTR_DT_INST(inst, delay_)		\
-	SPI_CS_CONTROL_PTR_DT(DT_DRV_INST(inst), delay_)
+#define SPI_CS_CONTROL_INIT_INST(inst, delay_)		\
+	SPI_CS_CONTROL_INIT(DT_DRV_INST(inst), delay_)
+
+/**
+ * @typedef spi_operation_t
+ * Opaque type to hold the SPI operation flags.
+ */
+#if defined(CONFIG_SPI_EXTENDED_MODES)
+typedef uint32_t spi_operation_t;
+#else
+typedef uint16_t spi_operation_t;
+#endif
 
 /**
  * @brief SPI controller configuration structure
- *
- * @param frequency is the bus frequency in Hertz
- * @param operation is a bit field with the following parts:
- *
- *     operational mode    [ 0 ]       - master or slave.
- *     mode                [ 1 : 3 ]   - Polarity, phase and loop mode.
- *     transfer            [ 4 ]       - LSB or MSB first.
- *     word_size           [ 5 : 10 ]  - Size of a data frame in bits.
- *     duplex              [ 11 ]      - full/half duplex.
- *     cs_hold             [ 12 ]      - Hold on the CS line if possible.
- *     lock_on             [ 13 ]      - Keep resource locked for the caller.
- *     cs_active_high      [ 14 ]      - Active high CS logic.
- *     format              [ 15 ]      - Motorola or TI frame format (optional).
- * if @kconfig{CONFIG_SPI_EXTENDED_MODES} is defined:
- *     lines               [ 16 : 17 ] - MISO lines: Single/Dual/Quad/Octal.
- *     reserved            [ 18 : 31 ] - reserved for future use.
- * @param slave is the slave number from 0 to host controller slave limit.
- * @param cs is a valid pointer on a struct spi_cs_control is CS line is
- *    emulated through a gpio line, or NULL otherwise.
- * @warning Most drivers use pointer comparison to determine whether a
- * passed configuration is different from one used in a previous
- * transaction.  Changes to fields in the structure may not be
- * detected.
  */
 struct spi_config {
-	uint32_t		frequency;
-#if defined(CONFIG_SPI_EXTENDED_MODES)
-	uint32_t		operation;
-	uint16_t		slave;
-	uint16_t		_unused;
-#else
-	uint16_t		operation;
-	uint16_t		slave;
-#endif /* CONFIG_SPI_EXTENDED_MODES */
-
+	/** @brief Bus frequency in Hertz. */
+	uint32_t frequency;
+	/**
+	 * @brief Operation flags.
+	 *
+	 * It is a bit field with the following parts:
+	 *
+	 * - 0:      Master or slave.
+	 * - 1..3:   Polarity, phase and loop mode.
+	 * - 4:      LSB or MSB first.
+	 * - 5..10:  Size of a data frame in bits.
+	 * - 11:     Full/half duplex.
+	 * - 12:     Hold on the CS line if possible.
+	 * - 13:     Keep resource locked for the caller.
+	 * - 14:     Active high CS logic.
+	 * - 15:     Motorola or TI frame format (optional).
+	 *
+	 * If @kconfig{CONFIG_SPI_EXTENDED_MODES} is enabled:
+	 *
+	 * - 16..17: MISO lines (Single/Dual/Quad/Octal).
+	 * - 18..31: Reserved for future use.
+	 */
+	spi_operation_t operation;
+	/** @brief Slave number from 0 to host controller slave limit. */
+	uint16_t slave;
+	/**
+	 * @brief GPIO chip-select line (optional, must be initialized to zero
+	 * if not used).
+	 */
 	struct spi_cs_control cs;
 };
 
@@ -313,10 +320,6 @@ struct spi_config {
  * This helper macro expands to a static initializer for a <tt>struct
  * spi_config</tt> by reading the relevant @p frequency, @p slave, and
  * @p cs data from the devicetree.
- *
- * Important: the @p cs field is initialized using
- * SPI_CS_CONTROL_PTR_DT(). The @p gpio_dev value pointed to by this
- * structure must be checked using device_is_ready() before use.
  *
  * @param node_id Devicetree node identifier for the SPI device whose
  *                struct spi_config to create an initializer for
@@ -420,6 +423,158 @@ struct spi_buf_set {
 	const struct spi_buf *buffers;
 	size_t count;
 };
+
+#if defined(CONFIG_SPI_STATS)
+STATS_SECT_START(spi)
+STATS_SECT_ENTRY32(rx_bytes)
+STATS_SECT_ENTRY32(tx_bytes)
+STATS_SECT_ENTRY32(transfer_error)
+STATS_SECT_END;
+
+STATS_NAME_START(spi)
+STATS_NAME(spi, rx_bytes)
+STATS_NAME(spi, tx_bytes)
+STATS_NAME(spi, transfer_error)
+STATS_NAME_END(spi);
+
+/**
+ * @brief SPI specific device state which allows for SPI device class specific additions
+ */
+struct spi_device_state {
+	struct device_state devstate;
+	struct stats_spi stats;
+};
+
+/**
+ * @brief Get pointer to SPI statistics structure
+ */
+#define Z_SPI_GET_STATS(dev_)				\
+	CONTAINER_OF(dev_->state, struct spi_device_state, devstate)->stats
+
+/**
+ * @brief Increment the rx bytes for a SPI device
+ *
+ * @param dev_ Pointer to the device structure for the driver instance.
+ */
+#define SPI_STATS_RX_BYTES_INCN(dev_, n)			\
+	STATS_INCN(Z_SPI_GET_STATS(dev_), rx_bytes, n)
+
+/**
+ * @brief Increment the tx bytes for a SPI device
+ *
+ * @param dev_ Pointer to the device structure for the driver instance.
+ */
+#define SPI_STATS_TX_BYTES_INCN(dev_, n)			\
+	STATS_INCN(Z_SPI_GET_STATS(dev_), tx_bytes, n)
+
+/**
+ * @brief Increment the transfer error counter for a SPI device
+ *
+ * The transfer error count is incremented when there occurred a transfer error
+ *
+ * @param dev_ Pointer to the device structure for the driver instance.
+ */
+#define SPI_STATS_TRANSFER_ERROR_INC(dev_)			\
+	STATS_INC(Z_SPI_GET_STATS(dev_), transfer_error)
+
+/**
+ * @brief Define a statically allocated and section assigned SPI device state
+ */
+#define Z_SPI_DEVICE_STATE_DEFINE(dev_id)	\
+	static struct spi_device_state Z_DEVICE_STATE_NAME(dev_id)	\
+	__attribute__((__section__(".z_devstate")));
+
+/**
+ * @brief Define an SPI device init wrapper function
+ *
+ * This does device instance specific initialization of common data (such as stats)
+ * and calls the given init_fn
+ */
+#define Z_SPI_INIT_FN(dev_id, init_fn)					\
+	static inline int UTIL_CAT(dev_id, _init)(const struct device *dev) \
+	{								\
+		struct spi_device_state *state =			\
+			CONTAINER_OF(dev->state, struct spi_device_state, devstate); \
+		stats_init(&state->stats.s_hdr, STATS_SIZE_32, 3,	\
+			   STATS_NAME_INIT_PARMS(spi));			\
+		stats_register(dev->name, &(state->stats.s_hdr));	\
+		return init_fn(dev);					\
+	}
+
+/**
+ * @brief Like DEVICE_DT_DEFINE() with SPI specifics.
+ *
+ * @details Defines a device which implements the SPI API. May
+ * generate a custom device_state container struct and init_fn
+ * wrapper when needed depending on SPI @kconfig{CONFIG_SPI_STATS}.
+ *
+ * @param node_id The devicetree node identifier.
+ * @param init_fn Name of the init function of the driver.
+ * @param pm_device PM device resources reference (NULL if device does not use PM).
+ * @param data_ptr Pointer to the device's private data.
+ * @param cfg_ptr The address to the structure containing the configuration
+ *                information for this instance of the driver.
+ * @param level The initialization level. See SYS_INIT() for details.
+ * @param prio Priority within the selected initialization level. See SYS_INIT()
+ *             for details.
+ * @param api_ptr Provides an initial pointer to the API function struct used by
+ *                the driver. Can be NULL.
+ */
+#define SPI_DEVICE_DT_DEFINE(node_id, init_fn, pm_device,		\
+			     data_ptr, cfg_ptr, level, prio,		\
+			     api_ptr, ...)				\
+	Z_SPI_DEVICE_STATE_DEFINE(Z_DEVICE_DT_DEV_ID(node_id));		\
+	Z_SPI_INIT_FN(Z_DEVICE_DT_DEV_ID(node_id), init_fn)		\
+	Z_DEVICE_DEFINE(node_id, Z_DEVICE_DT_DEV_ID(node_id),		\
+			DEVICE_DT_NAME(node_id),			\
+			&UTIL_CAT(Z_DEVICE_DT_DEV_ID(node_id), _init),	\
+			pm_device,					\
+			data_ptr, cfg_ptr, level, prio,			\
+			api_ptr,					\
+			&(Z_DEVICE_STATE_NAME(Z_DEVICE_DT_DEV_ID(node_id)).devstate), \
+			__VA_ARGS__)
+
+static inline void spi_transceive_stats(const struct device *dev, int error,
+					const struct spi_buf_set *tx_bufs,
+					const struct spi_buf_set *rx_bufs)
+{
+	uint32_t tx_bytes;
+	uint32_t rx_bytes;
+
+	if (error) {
+		SPI_STATS_TRANSFER_ERROR_INC(dev);
+	}
+
+	if (tx_bufs) {
+		tx_bytes = tx_bufs->count ? tx_bufs->buffers->len : 0;
+		SPI_STATS_TX_BYTES_INCN(dev, tx_bytes);
+	}
+
+	if (rx_bufs) {
+		rx_bytes = rx_bufs->count ? rx_bufs->buffers->len : 0;
+		SPI_STATS_RX_BYTES_INCN(dev, rx_bytes);
+	}
+}
+
+#else /*CONFIG_SPI_STATS*/
+
+#define SPI_DEVICE_DT_DEFINE(node_id, init_fn, pm,		\
+				data, config, level, prio,	\
+				api, ...)			\
+	Z_DEVICE_STATE_DEFINE(Z_DEVICE_DT_DEV_ID(node_id));			\
+	Z_DEVICE_DEFINE(node_id, Z_DEVICE_DT_DEV_ID(node_id),			\
+			DEVICE_DT_NAME(node_id), init_fn, pm, data, config,	\
+			level, prio, api,					\
+			&Z_DEVICE_STATE_NAME(Z_DEVICE_DT_DEV_ID(node_id)),	\
+			__VA_ARGS__)
+
+#define SPI_STATS_RX_BYTES_INC(dev_)
+#define SPI_STATS_TX_BYTES_INC(dev_)
+#define SPI_STATS_TRANSFER_ERROR_INC(dev_)
+
+#define spi_transceive_stats(dev, error, tx_bufs, rx_bufs)
+
+#endif /*CONFIG_SPI_STATS*/
 
 /**
  * @typedef spi_api_io
@@ -585,8 +740,12 @@ static inline int z_impl_spi_transceive(const struct device *dev,
 {
 	const struct spi_driver_api *api =
 		(const struct spi_driver_api *)dev->api;
+	int ret;
 
-	return api->transceive(dev, config, tx_bufs, rx_bufs);
+	ret = api->transceive(dev, config, tx_bufs, rx_bufs);
+	spi_transceive_stats(dev, ret, tx_bufs, rx_bufs);
+
+	return ret;
 }
 
 /**

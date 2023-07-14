@@ -1,10 +1,13 @@
 /*
  * Copyright 2022 Google LLC
+ * Copyright 2023 Microsoft Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/emul_fuel_gauge.h>
 #include <zephyr/drivers/fuel_gauge.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/logging/log.h>
@@ -15,6 +18,7 @@
 
 struct sbs_gauge_new_api_fixture {
 	const struct device *dev;
+	const struct emul *sbs_fuel_gauge;
 	const struct fuel_gauge_driver_api *api;
 };
 
@@ -23,6 +27,7 @@ static void *sbs_gauge_new_api_setup(void)
 	static ZTEST_DMEM struct sbs_gauge_new_api_fixture fixture;
 
 	fixture.dev = DEVICE_DT_GET_ANY(sbs_sbs_gauge_new_api);
+	fixture.sbs_fuel_gauge = EMUL_DT_GET(DT_NODELABEL(smartbattery0));
 
 	k_object_access_all_grant(fixture.dev);
 
@@ -214,7 +219,10 @@ ZTEST_USER_F(sbs_gauge_new_api, test_get_props__returns_ok)
 			.property_type = FUEL_GAUGE_TEMPERATURE,
 		},
 		{
-			.property_type = FUEL_GAUGE_STATE_OF_CHARGE,
+			.property_type = FUEL_GAUGE_ABSOLUTE_STATE_OF_CHARGE,
+		},
+		{
+			.property_type = FUEL_GAUGE_RELATIVE_STATE_OF_CHARGE,
 		},
 		{
 			.property_type = FUEL_GAUGE_RUNTIME_TO_FULL,
@@ -312,6 +320,60 @@ ZTEST_USER_F(sbs_gauge_new_api, test_set_props__returns_ok)
 	}
 
 	zassert_ok(ret);
+}
+
+
+ZTEST_USER_F(sbs_gauge_new_api, test_get_buffer_props__returns_ok)
+{
+	/* Validate what properties are supported by the driver */
+	struct fuel_gauge_get_buffer_property prop;
+	struct sbs_gauge_manufacturer_name mfg_name;
+	struct sbs_gauge_device_name dev_name;
+	struct sbs_gauge_device_chemistry chem;
+	int ret;
+
+	prop.property_type = FUEL_GAUGE_MANUFACTURER_NAME;
+	ret = fuel_gauge_get_buffer_prop(fixture->dev, &prop, &mfg_name, sizeof(mfg_name));
+	zassert_ok(prop.status, "Property %d has a bad status.", prop.property_type);
+	zassert_ok(ret);
+
+	prop.property_type = FUEL_GAUGE_DEVICE_NAME;
+	ret = fuel_gauge_get_buffer_prop(fixture->dev, &prop, &dev_name, sizeof(dev_name));
+	zassert_ok(prop.status, "Property %d has a bad status.", prop.property_type);
+	zassert_ok(ret);
+
+	prop.property_type = FUEL_GAUGE_DEVICE_CHEMISTRY;
+	ret = fuel_gauge_get_buffer_prop(fixture->dev, &prop, &chem, sizeof(chem));
+	zassert_ok(prop.status, "Property %d has a bad status.", prop.property_type);
+	zassert_ok(ret);
+}
+
+ZTEST_F(sbs_gauge_new_api, test_charging_5v_3a)
+{
+	/* Validate what props are supported by the driver */
+	uint32_t expected_uV = 5000 * 1000;
+	uint32_t expected_uA = 3000 * 1000;
+
+	struct fuel_gauge_get_property props[] = {
+		{
+			.property_type = FUEL_GAUGE_VOLTAGE,
+		},
+		{
+			.property_type = FUEL_GAUGE_CURRENT,
+		},
+	};
+
+	zassume_ok(emul_fuel_gauge_set_battery_charging(fixture->sbs_fuel_gauge, expected_uV,
+							expected_uA));
+	zassert_ok(fuel_gauge_get_prop(fixture->dev, props, ARRAY_SIZE(props)));
+
+	zassert_ok(props[0].status);
+	zassert_equal(props[0].value.voltage, expected_uV, "Got %d instead of %d",
+		      props[0].value.voltage, expected_uV);
+
+	zassert_ok(props[1].status);
+	zassert_equal(props[1].value.current, expected_uA, "Got %d instead of %d",
+		      props[1].value.current, expected_uA);
 }
 
 ZTEST_SUITE(sbs_gauge_new_api, NULL, sbs_gauge_new_api_setup, NULL, NULL, NULL);

@@ -4,14 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @file
- * @defgroup bt_mesh_dfu Bluetooth mesh Device Firmware Update
- * @{
- * @brief Common types and functions for the Bluetooth mesh Device Firmware
- *        Update procedure.
- */
-
 #ifndef ZEPHYR_INCLUDE_BLUETOOTH_MESH_DFU_H__
 #define ZEPHYR_INCLUDE_BLUETOOTH_MESH_DFU_H__
 
@@ -23,6 +15,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @defgroup bt_mesh_dfu Bluetooth Mesh Device Firmware Update
+ * @ingroup bt_mesh
+ * @{
+ */
 
 #ifndef CONFIG_BT_MESH_DFU_FWID_MAXLEN
 #define CONFIG_BT_MESH_DFU_FWID_MAXLEN 0
@@ -68,11 +66,7 @@ enum bt_mesh_dfu_phase {
 	/** Firmware applying failed. */
 	BT_MESH_DFU_PHASE_APPLY_FAIL,
 
-	/** The current phase is unknown.
-	 *
-	 *  This is a metaphase, used by the Firmware Update Client to keep track of
-	 *  the Target state, and is not defined by the specification.
-	 */
+	/** Phase of a node was not yet retrieved. */
 	BT_MESH_DFU_PHASE_UNKNOWN,
 };
 
@@ -171,10 +165,10 @@ struct bt_mesh_dfu_slot {
 	char uri[CONFIG_BT_MESH_DFU_URI_MAXLEN];
 };
 
+/** @} */
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* ZEPHYR_INCLUDE_BLUETOOTH_MESH_DFU_H__ */
-
-/** @} */

@@ -25,6 +25,7 @@
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/slist.h>
+#include <zephyr/rtio/rtio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -226,6 +227,16 @@ typedef int (*i2c_api_transfer_cb_t)(const struct device *dev,
 				 i2c_callback_t cb,
 				 void *userdata);
 #endif /* CONFIG_I2C_CALLBACK */
+#if defined(CONFIG_I2C_RTIO) || defined(DOXYGEN)
+
+/**
+ * @typedef i2c_api_iodev_submit
+ * @brief Callback API for submitting work to a I2C device with RTIO
+ */
+typedef void (*i2c_api_iodev_submit)(const struct device *dev,
+				     struct rtio_iodev_sqe *iodev_sqe);
+#endif /* CONFIG_I2C_RTIO */
+
 typedef int (*i2c_api_recover_bus_t)(const struct device *dev);
 
 __subsystem struct i2c_driver_api {
@@ -236,6 +247,9 @@ __subsystem struct i2c_driver_api {
 	i2c_api_target_unregister_t target_unregister;
 #ifdef CONFIG_I2C_CALLBACK
 	i2c_api_transfer_cb_t transfer_cb;
+#endif
+#ifdef CONFIG_I2C_RTIO
+	i2c_api_iodev_submit iodev_submit;
 #endif
 	i2c_api_recover_bus_t recover_bus;
 };
@@ -338,6 +352,49 @@ typedef int (*i2c_target_read_requested_cb_t)(
 typedef int (*i2c_target_read_processed_cb_t)(
 		struct i2c_target_config *config, uint8_t *val);
 
+#ifdef CONFIG_I2C_TARGET_BUFFER_MODE
+/** @brief Function called when a write to the device is completed.
+ *
+ * This function is invoked by the controller when it completes
+ * reception of data from the source buffer to the destination
+ * buffer in an ongoing write operation to the device.
+ *
+ * @param config the configuration structure associated with the
+ * device to which the operation is addressed.
+ *
+ * @param ptr pointer to the buffer that contains the data to be transferred.
+ *
+ * @param len the length of the data to be transferred.
+ */
+typedef void (*i2c_target_buf_write_received_cb_t)(
+		struct i2c_target_config *config, uint8_t *ptr, uint32_t len);
+
+/** @brief Function called when a read from the device is initiated.
+ *
+ * This function is invoked by the controller when the bus is ready to
+ * provide additional data by buffer for a read operation from the address
+ * associated with the device.
+ *
+ * The value returned in @p **ptr and @p *len will be transmitted. A success
+ * return shall cause the controller to react to additional read operations.
+ * An error return shall cause the controller to ignore bus operations until
+ * a new start condition is received.
+ *
+ * @param config the configuration structure associated with the
+ * device to which the operation is addressed.
+ *
+ * @param ptr pointer to storage for the address of data buffer to return
+ * for the read request.
+ *
+ * @param len pointer to storage for the length of the data to be transferred
+ * for the read request.
+ *
+ * @return 0 if data has been provided, or a negative error code.
+ */
+typedef int (*i2c_target_buf_read_requested_cb_t)(
+		struct i2c_target_config *config, uint8_t **ptr, uint32_t *len);
+#endif
+
 /** @brief Function called when a stop condition is observed after a
  * start condition addressed to a particular device.
  *
@@ -365,6 +422,10 @@ struct i2c_target_callbacks {
 	i2c_target_read_requested_cb_t read_requested;
 	i2c_target_write_received_cb_t write_received;
 	i2c_target_read_processed_cb_t read_processed;
+#ifdef CONFIG_I2C_TARGET_BUFFER_MODE
+	i2c_target_buf_write_received_cb_t buf_write_received;
+	i2c_target_buf_read_requested_cb_t buf_read_requested;
+#endif
 	i2c_target_stop_cb_t stop;
 };
 
@@ -899,6 +960,57 @@ static inline int i2c_transfer_signal(const struct device *dev,
 #endif /* CONFIG_POLL */
 
 #endif /* CONFIG_I2C_CALLBACK */
+
+
+#if defined(CONFIG_I2C_RTIO) || defined(DOXYGEN)
+
+/**
+ * @brief Submit request(s) to an I2C device with RTIO
+ *
+ * @param iodev_sqe Prepared submissions queue entry connected to an iodev
+ *                  defined by I2C_DT_IODEV_DEFINE.
+ */
+static inline void i2c_iodev_submit(struct rtio_iodev_sqe *iodev_sqe)
+{
+	const struct i2c_dt_spec *dt_spec = iodev_sqe->sqe->iodev->data;
+	const struct device *dev = dt_spec->bus;
+	const struct i2c_driver_api *api = (const struct i2c_driver_api *)dev->api;
+
+	api->iodev_submit(dt_spec->bus, iodev_sqe);
+}
+
+extern const struct rtio_iodev_api i2c_iodev_api;
+
+/**
+ * @brief Define an iodev for a given dt node on the bus
+ *
+ * These do not need to be shared globally but doing so
+ * will save a small amount of memory.
+ *
+ * @param node DT_NODE
+ */
+#define I2C_DT_IODEV_DEFINE(name, node_id)					\
+	const struct i2c_dt_spec _i2c_dt_spec_##name =				\
+		I2C_DT_SPEC_GET(node_id);					\
+	RTIO_IODEV_DEFINE(name, &i2c_iodev_api, (void *)&_i2c_dt_spec_##name)
+
+/**
+ * @brief Copy the i2c_msgs into a set of RTIO requests
+ *
+ * @param r RTIO context
+ * @param iodev RTIO IODev to target for the submissions
+ * @param msgs Array of messages
+ * @param num_msgs Number of i2c msgs in array
+ *
+ * @retval sqe Last submission in the queue added
+ * @retval NULL Not enough memory in the context to copy the requests
+ */
+struct rtio_sqe *i2c_rtio_copy(struct rtio *r,
+			       struct rtio_iodev *iodev,
+			       const struct i2c_msg *msgs,
+			       uint8_t num_msgs);
+
+#endif /* CONFIG_I2C_RTIO */
 
 /**
  * @brief Perform data transfer to another I2C device in controller mode.

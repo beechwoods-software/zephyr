@@ -27,11 +27,11 @@ from get_maintainer import Maintainers, MaintainersError
 
 logger = None
 
-def git(*args, cwd=None):
+def git(*args, cwd=None, ignore_non_zero=False):
     # Helper for running a Git command. Returns the rstrip()ed stdout output.
     # Called like git("diff"). Exits with SystemError (raised by sys.exit()) on
-    # errors. 'cwd' is the working directory to use (default: current
-    # directory).
+    # errors if 'ignore_non_zero' is set to False (default: False). 'cwd' is the
+    # working directory to use (default: current directory).
 
     git_cmd = ("git",) + args
     try:
@@ -39,7 +39,7 @@ def git(*args, cwd=None):
     except OSError as e:
         err(f"failed to run '{cmd2str(git_cmd)}': {e}")
 
-    if cp.returncode or cp.stderr:
+    if not ignore_non_zero and (cp.returncode or cp.stderr):
         err(f"'{cmd2str(git_cmd)}' exited with status {cp.returncode} and/or "
             f"wrote to stderr.\n"
             f"==stdout==\n"
@@ -268,7 +268,9 @@ class KconfigCheck(ComplianceTest):
     doc = "See https://docs.zephyrproject.org/latest/guides/kconfig/index.html for more details."
     path_hint = "<zephyr-base>"
 
-    def run(self, full=True):
+    def run(self, full=True, no_modules=False):
+        self.no_modules = no_modules
+
         kconf = self.parse_kconfig()
 
         self.check_top_menu_not_too_long(kconf)
@@ -287,6 +289,11 @@ class KconfigCheck(ComplianceTest):
         This is needed to complete Kconfig sanity tests.
 
         """
+        if self.no_modules:
+            with open(modules_file, 'w') as fp_module_file:
+                fp_module_file.write("# Empty\n")
+            return
+
         # Invoke the script directly using the Python executable since this is
         # not a module nor a pip-installed Python utility
         zephyr_module_path = os.path.join(ZEPHYR_BASE, "scripts",
@@ -440,9 +447,13 @@ deliberately adding new entries, then bump the 'max_top_items' variable in
         # Checks that no symbols are (re)defined in defconfigs.
 
         for node in kconf.node_iter():
+            # 'kconfiglib' is global
+            # pylint: disable=undefined-variable
             if "defconfig" in node.filename and (node.prompt or node.help):
+                name = (node.item.name if node.item not in
+                        (kconfiglib.MENU, kconfiglib.COMMENT) else str(node))
                 self.failure(f"""
-Kconfig node '{node.item.name}' found with prompt or help in {node.filename}.
+Kconfig node '{name}' found with prompt or help in {node.filename}.
 Options must not be defined in defconfig files.
 """)
                 continue
@@ -608,6 +619,11 @@ flagged.
         "BOOT_SERIAL_CDC_ACM",       # Used in (sysbuild-based) test
         "BOOT_SERIAL_ENTRANCE_GPIO", # Used in (sysbuild-based) test
         "BOOT_SERIAL_IMG_GRP_HASH",  # Used in documentation
+        "BOOT_SIGNATURE_KEY_FILE", # MCUboot setting used by sysbuild
+        "BOOT_SIGNATURE_TYPE_ECDSA_P256", # MCUboot setting used by sysbuild
+        "BOOT_SIGNATURE_TYPE_ED25519", # MCUboot setting used by sysbuild
+        "BOOT_SIGNATURE_TYPE_NONE", # MCUboot setting used by sysbuild
+        "BOOT_SIGNATURE_TYPE_RSA", # MCUboot setting used by sysbuild
         "BOOT_VALIDATE_SLOT0",       # Used in (sysbuild-based) test
         "BOOT_WATCHDOG_FEED",        # Used in (sysbuild-based) test
         "BTTESTER_LOG_LEVEL",  # Used in tests/bluetooth/tester
@@ -701,6 +717,18 @@ class KconfigBasicCheck(KconfigCheck):
 
     def run(self):
         super().run(full=False)
+
+class KconfigBasicNoModulesCheck(KconfigCheck):
+    """
+    Checks if we are introducing any new warnings/errors with Kconfig when no
+    modules are available. Catches symbols used in the main repository but
+    defined only in a module.
+    """
+    name = "KconfigBasicNoModules"
+    doc = "See https://docs.zephyrproject.org/latest/guides/kconfig/index.html for more details."
+    path_hint = "<zephyr-base>"
+    def run(self):
+        super().run(full=False, no_modules=True)
 
 
 class Nits(ComplianceTest):
@@ -796,6 +824,33 @@ concatenated together, so no document separators are needed.""")
 
         if contents.endswith("\n\n"):
             self.failure(f"Please remove blank lines at end of '{fname}'")
+
+
+class GitDiffCheck(ComplianceTest):
+    """
+    Checks for conflict markers or whitespace errors with git diff --check
+    """
+    name = "GitDiffCheck"
+    doc = "Git conflict markers and whitespace errors are not allowed in added changes"
+    path_hint = "<git-top>"
+
+    def run(self):
+        offending_lines = []
+        # Use regex to filter out unnecessay output
+        # Reason: `--check` is mutually exclusive with `--name-only` and `-s`
+        p = re.compile(r"\S+\: .*\.")
+
+        for shaidx in get_shas(COMMIT_RANGE):
+            # Ignore non-zero return status code
+            # Reason: `git diff --check` sets the return code to the number of offending lines
+            diff = git("diff", f"{shaidx}^!", "--check", ignore_non_zero=True)
+
+            lines = p.findall(diff)
+            lines = map(lambda x: f"{shaidx}: {x}", lines)
+            offending_lines.extend(lines)
+
+        if len(offending_lines) > 0:
+            self.failure("\n".join(offending_lines))
 
 
 class GitLint(ComplianceTest):

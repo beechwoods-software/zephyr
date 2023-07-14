@@ -79,9 +79,9 @@ if(CONF_FILE)
   string(REPLACE " " ";" CONF_FILE_AS_LIST "${CONF_FILE_EXPANDED}")
 endif()
 
-if(OVERLAY_CONFIG)
-  string(CONFIGURE "${OVERLAY_CONFIG}" OVERLAY_CONFIG_EXPANDED)
-  string(REPLACE " " ";" OVERLAY_CONFIG_AS_LIST "${OVERLAY_CONFIG_EXPANDED}")
+if(EXTRA_CONF_FILE)
+  string(CONFIGURE "${EXTRA_CONF_FILE}" EXTRA_CONF_FILE_EXPANDED)
+  string(REPLACE " " ";" EXTRA_CONF_FILE_AS_LIST "${EXTRA_CONF_FILE_EXPANDED}")
 endif()
 
 
@@ -251,7 +251,7 @@ set(
   ${BOARD_REVISION_CONFIG}
   ${CONF_FILE_AS_LIST}
   ${shield_conf_files}
-  ${OVERLAY_CONFIG_AS_LIST}
+  ${EXTRA_CONF_FILE_AS_LIST}
   ${EXTRA_KCONFIG_OPTIONS_FILE}
   ${config_files}
 )
@@ -306,10 +306,14 @@ if(EXISTS ${DOTCONFIG} AND EXISTS ${merge_config_files_checksum_file})
 endif()
 
 if(CREATE_NEW_DOTCONFIG)
-  set(input_configs_are_handwritten --handwritten-input-configs)
-  set(input_configs ${merge_config_files})
+  set(input_configs_flags --handwritten-input-configs)
+  set(input_configs ${merge_config_files} ${FORCED_CONF_FILE})
 else()
-  set(input_configs ${DOTCONFIG})
+  set(input_configs ${DOTCONFIG} ${FORCED_CONF_FILE})
+endif()
+
+if(DEFINED FORCED_CONF_FILE)
+  list(APPEND input_configs_flags --forced-input-configs)
 endif()
 
 cmake_path(GET AUTOCONF_H PARENT_PATH autoconf_h_path)
@@ -324,7 +328,7 @@ execute_process(
   ${PYTHON_EXECUTABLE}
   ${ZEPHYR_BASE}/scripts/kconfig/kconfig.py
   --zephyr-base=${ZEPHYR_BASE}
-  ${input_configs_are_handwritten}
+  ${input_configs_flags}
   ${KCONFIG_ROOT}
   ${DOTCONFIG}
   ${AUTOCONF_H}
