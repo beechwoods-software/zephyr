@@ -7,7 +7,7 @@ menuconfig WIFI_RPIPICOWCYW43
 	bool "Raspberry Pi Pico W Wifi support"
 	default y
 	select NET_L2_WIFI_MGMT
-	select WIFI_OFFLOAD
+	select WIFI_USE_NATIVE_NETWORKING
 	select NET_OFFLOAD
 	select NET_SOCKETS
 	imply NET_SOCKETS_OFFLOAD
