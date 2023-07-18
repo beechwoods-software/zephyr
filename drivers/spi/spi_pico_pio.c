@@ -29,6 +29,7 @@ struct spi_pico_pio_config {
 	struct gpio_dt_spec clk_gpio;
 	struct gpio_dt_spec mosi_gpio;
 	struct gpio_dt_spec miso_gpio;
+	const uint32_t clock_freq;
 };
 
 struct spi_pico_pio_data {
@@ -60,19 +61,19 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_1_cpha_1, 0, 2,
 				/*     .wrap */
 );
 
-static float spi_pico_pio_clock_divisor(uint32_t spi_frequency)
+static float spi_pico_pio_clock_divisor(const struct spi_pico_pio_config *dev_cfg, uint32_t spi_frequency)
 {
-	return (float)clock_get_hz(clk_sys) / (float)(PIO_CYCLES * spi_frequency);
+	return (float)dev_cfg->clock_freq / (float)(PIO_CYCLES * spi_frequency);
 }
 
-static uint32_t spi_pico_pio_maximum_clock_frequency(void)
+static uint32_t spi_pico_pio_maximum_clock_frequency(const struct spi_pico_pio_config *dev_cfg)
 {
-	return clock_get_hz(clk_sys) / PIO_CYCLES;
+	return dev_cfg->clock_freq / PIO_CYCLES;
 }
 
-static uint32_t spi_pico_pio_minimum_clock_frequency(void)
+static uint32_t spi_pico_pio_minimum_clock_frequency(const struct spi_pico_pio_config *dev_cfg)
 {
-	return clock_get_hz(clk_sys) / (PIO_CYCLES * 65536);
+	return dev_cfg->clock_freq / (PIO_CYCLES * 65536);
 }
 
 static inline bool spi_pico_pio_transfer_ongoing(struct spi_pico_pio_data *data)
@@ -144,13 +145,13 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	data->bits = bits;
 	data->dfs = ((data->bits - 1) / 8) + 1;
 
-	if ((spi_cfg->frequency > spi_pico_pio_maximum_clock_frequency()) ||
-	    (spi_cfg->frequency < spi_pico_pio_minimum_clock_frequency())) {
+	if ((spi_cfg->frequency > spi_pico_pio_maximum_clock_frequency(dev_cfg)) ||
+	    (spi_cfg->frequency < spi_pico_pio_minimum_clock_frequency(dev_cfg))) {
 		LOG_ERR("clock-frequency out of range");
 		return -EINVAL;
 	}
 
-	float clock_div = spi_pico_pio_clock_divisor(spi_cfg->frequency);
+	float clock_div = spi_pico_pio_clock_divisor(dev_cfg, spi_cfg->frequency);
 
 	/* Half-duplex mode has not been implemented */
 	if (spi_cfg->operation & SPI_HALF_DUPLEX) {
@@ -398,6 +399,7 @@ int spi_pico_pio_init(const struct device *dev)
 		.clk_gpio = GPIO_DT_SPEC_INST_GET(inst, clk_gpios),                                \
 		.mosi_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, mosi_gpios, {0}),                      \
 		.miso_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, miso_gpios, {0}),                      \
+		.clock_freq = DT_INST_PROP_BY_PHANDLE(inst, clocks, clock_frequency),              \
 	};                                                                                         \
                                                                                                    \
 	static struct spi_pico_pio_data spi_pico_pio_data_##inst = {                               \
