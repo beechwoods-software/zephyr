@@ -18,7 +18,9 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
 
-#define DT_DRV_COMPAT infineon_cyw43
+#include "picowi/picowi_pio.h"
+
+//#define DT_DRV_COMPAT infineon_cyw43
 
 #define WHD_BUS_SPI_BACKPLANE_READ_PADD_SIZE        (4)
 
@@ -53,6 +55,7 @@ static bool enable_spi_packet_dumping=true; // set to true to dump
 #define DUMP_SPI_TRANSACTIONS(A) if (enable_spi_packet_dumping) {A}
 #endif
 
+//static uint32_t counter = 0;
 #else
 #define DUMP_SPI_TRANSACTIONS(A)
 #endif
@@ -64,39 +67,17 @@ __force_inline static uint32_t __swap16x2(uint32_t a) {
 }
 #define SWAP32(a) __swap16x2(a)
 
-struct cyw43_pio_spi_config {
-	struct spi_dt_spec bus;
-};
+//static const struct device *gpio = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
-struct cyw43_pio_spi_data {
-	const struct cyw43_pio_spi_config *cfg;
-  //struct k_thread poll_thread;
-};
-
-static const struct cyw43_pio_spi_config cyw43_config_pio_spi0 = {
-        .bus = SPI_DT_SPEC_INST_GET(0, SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB |
-				    SPI_WORD_SET(16) | SPI_HOLD_ON_CS |
-				    SPI_LOCK_ON, 1000U),
-};
-
-static struct cyw43_pio_spi_data cyw43_pio_spi0;
-
-static const struct device *gpio = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
 int cyw43_spi_init(cyw43_int_t *self) {
-
-  struct cyw43_pio_spi_data *spi = &cyw43_pio_spi0; /* Static instance */
-  const struct cyw43_pio_spi_config *cfg = &cyw43_config_pio_spi0; /* Static instance */
-
 
     // Only does something if CYW43_LOGIC_DEBUG=1
     logic_debug_init();
 
-
-    spi->cfg = cfg;
-    self->bus_data = spi;
-
-    cyw43_spi_reset();
+    cyw43_spi_gpio_setup();
+    
+    pio_init();
     
     assert(!self->bus_data);
     
@@ -113,50 +94,43 @@ static void dump_bytes(const uint8_t *bptr, uint32_t len) {
     unsigned int i = 0;
 
     for (i = 0; i < len;) {
-        if ((i & 0x07) == 0) {
+      /* if ((i & 0x0f) == 0) {
+            printf("\n");
+	    } else */ if ((i & 0x07) == 0) {
             printf(" ");
         }
         printf("%02x ", bptr[i++]);
     }
-    printf("\n");
 }
 #endif
 
-static struct spi_buf spi_tx_buf;
-static struct spi_buf spi_rx_buf;
-
-static const struct spi_buf_set spi_tx = {
-  .buffers = &spi_tx_buf,
-  .count = 1
-};
-
-static const struct spi_buf_set spi_rx = {
-  .buffers = &spi_rx_buf,
-  .count = 1
-};
 
 int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, uint8_t *rx,
                        size_t rx_length) {
-  int rv;
 
+  bool tx_only = false;
+  
   CYW43_VDEBUG("Calling cyw43_spi_transfer(self=0x%lx, tx=0x%lx, tx_length=%d, rx=0x%lx, rx_length=%d)\n",
-	       (unsigned long)self, (unsigned long)tx, (unsigned int)tx_length,
-	       (unsigned long)rx, (unsigned int)rx_length);
+         (unsigned long)self, (unsigned long)tx, (unsigned int)tx_length,
+  	       (unsigned long)rx, (unsigned int)rx_length);
   
     if ((tx == NULL) && (rx == NULL)) {
         return CYW43_FAIL_FAST_CHECK(-CYW43_EINVAL);
     }
 
-    /* According to example in pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_bus_pio_spi.c
-       a call with null tx, but non-null rx means to the contents of "rx" as the data to send
-       and then use the same buffer for the recieve data. The cyw43 functions that call 
-       cyw43. This may still not work quite right with spi_transceive */
     
-    if (tx == NULL && rx != NULL) {
-      tx = rx;
-    }
-    
-    if (tx != NULL) {
+    if (rx != NULL) {
+      if (tx == NULL) {
+	tx = rx;
+	assert(tx_length && tx_length < rx_length);
+      }
+      else {
+	tx_only=true;
+      }
+      
+      gpio_put(CS_PIN, false);
+      
+      pio_spi_write((unsigned char *)tx, (int)tx_length);
       DUMP_SPI_TRANSACTIONS(
 	    printf("TXed:");
             dump_bytes(tx, tx_length);
@@ -164,40 +138,75 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
       )
     }
     
-    spi_tx_buf.buf = (uint8_t *)tx;
-    spi_tx_buf.len = (size_t)tx_length;
-    spi_rx_buf.buf = rx;
-    spi_rx_buf.len = (size_t)rx_length;
-
-    struct cyw43_pio_spi_data *bus_data = (struct cyw43_pio_spi_data *)self->bus_data;
-    rv = spi_transceive_dt(&bus_data->cfg->bus, &spi_tx, &spi_rx);
-
-    CYW43_VDEBUG("spi_transceive_dt() returned %d\n", rv);
-
-    if (rx != NULL) {
+    if (!tx_only) {
+      memset(rx, 0, rx_length);
+      pio_spi_read((unsigned char *)rx, (int)rx_length);
       DUMP_SPI_TRANSACTIONS(
-            printf("RXed:");
+	    printf("RXed:");
             dump_bytes(rx, rx_length);
             printf("\n");
       )
+
     }
-    return rv;
+    
+    gpio_put(CS_PIN, true);
+    
+    return 0;
 }
 
 // Initialise our gpios
 void cyw43_spi_gpio_setup(void) {
-  // this function would normally set up GPIO pins (direction, etc).
-  // since this is already done as dictated in the dts by Zephyr
-  // the function is a NOP for our port.
-  return;
+  printf("cyw43_spi_gpio_setup()\n");
+    // Setup WL_REG_ON (23)
+    gpio_init(WL_REG_ON);
+    gpio_set_dir(WL_REG_ON, GPIO_OUT);
+    gpio_pull_up(WL_REG_ON);
+    //gpio_put(WL_REG_ON, false);
+
+    // Setup CS (25)
+    gpio_init(CS_PIN);
+    gpio_set_dir(CS_PIN, GPIO_OUT);
+    //gpio_pull_up(CS_PIN);
+    gpio_put(CS_PIN, true);
+
+#if 0    
+    // Setup CLOCK (29)
+    gpio_init(CLOCK_PIN);
+    gpio_set_dir(CLOCK_PIN, GPIO_OUT);
+    //gpio_pull_up(CLOCK_PIN);
+    gpio_put(CLOCK_PIN, false);
+#endif
+    
+    // Setup DO, DI and IRQ (24)
+    gpio_init(DATA_OUT_PIN);
+    gpio_set_dir(DATA_OUT_PIN, GPIO_OUT);
+    //gpio_pull_up(DATA_OUT_PIN);
+    gpio_put(DATA_OUT_PIN, false);
+
+#if 0    
+    k_sleep(K_MSEC(100));
+    
+    gpio_put(WL_REG_ON, false);
+
+    k_sleep(K_MSEC(50));
+
+    gpio_set_dir(DATA_OUT_PIN, GPIO_IN);
+    gpio_set_dir(IRQ_PIN, GPIO_IN);
+#endif
 }
 
 // Reset wifi chip
 void cyw43_spi_reset(void) {
-    gpio_pin_set(gpio, WL_REG_ON, false); // off
+  printf("cyw43_spi_reset()\n");
+    gpio_put(WL_REG_ON, false); // off
     k_sleep(K_MSEC(20));
-    gpio_pin_set(gpio, WL_REG_ON, true); // on
+    gpio_put(WL_REG_ON, true); // on
     k_sleep(K_MSEC(250));
+
+    // Setup IRQ (24) - also used for DO, DI
+    gpio_init(IRQ_PIN);
+    //gpio_set_dir(DATA_OUT_PIN, GPIO_IN);
+    gpio_set_dir(IRQ_PIN, GPIO_IN);
 }
 
 static inline uint32_t make_cmd(bool write, bool inc, uint32_t fn, uint32_t addr, uint32_t sz) {
