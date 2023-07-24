@@ -30,6 +30,7 @@ struct spi_pico_pio_config {
 	struct gpio_dt_spec mosi_gpio;
 	struct gpio_dt_spec miso_gpio;
 	const uint32_t clock_freq;
+	bool sio;
 };
 
 struct spi_pico_pio_data {
@@ -46,14 +47,14 @@ struct spi_pico_pio_data {
 	bool half_duplex;
 };
 
-RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_0_cpha_0, 0, 1,
+RPI_PICO_PIO_DEFINE_PROGRAM(spi_mode_0_0, 0, 1,
 			    /*     .wrap_target */
 			    0x6101, /*  0: out    pins, 1         side 0 [1] */
 			    0x5101, /*  1: in     pins, 1         side 1 [1] */
 				/*     .wrap */
 );
 
-RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_1_cpha_1, 0, 2,
+RPI_PICO_PIO_DEFINE_PROGRAM(spi_mode_1_1, 0, 2,
 			    /*     .wrap_target */
 			    0x7021, /*  0: out    x, 1            side 1 */
 			    0xa101, /*  1: mov    pins, x         side 0 [1] */
@@ -61,7 +62,8 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_cpol_1_cpha_1, 0, 2,
 				/*     .wrap */
 );
 
-static float spi_pico_pio_clock_divisor(const struct spi_pico_pio_config *dev_cfg, uint32_t spi_frequency)
+static float spi_pico_pio_clock_divisor(const struct spi_pico_pio_config *dev_cfg,
+	uint32_t spi_frequency)
 {
 	return (float)dev_cfg->clock_freq / (float)(PIO_CYCLES * spi_frequency);
 }
@@ -185,13 +187,13 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	}
 
 	if ((data->cpol == 0) && (data->cpha == 0)) {
-		program = RPI_PICO_PIO_GET_PROGRAM(spi_cpol_0_cpha_0);
-		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_cpol_0_cpha_0);
-		wrap = RPI_PICO_PIO_GET_WRAP(spi_cpol_0_cpha_0);
+		program = RPI_PICO_PIO_GET_PROGRAM(spi_mode_0_0);
+		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_mode_0_0);
+		wrap = RPI_PICO_PIO_GET_WRAP(spi_mode_0_0);
 	} else if ((data->cpol == 1) && (data->cpha == 1)) {
-		program = RPI_PICO_PIO_GET_PROGRAM(spi_cpol_1_cpha_1);
-		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_cpol_1_cpha_1);
-		wrap = RPI_PICO_PIO_GET_WRAP(spi_cpol_1_cpha_1);
+		program = RPI_PICO_PIO_GET_PROGRAM(spi_mode_1_1);
+		wrap_target = RPI_PICO_PIO_GET_WRAP_TARGET(spi_mode_1_1);
+		wrap = RPI_PICO_PIO_GET_WRAP(spi_mode_1_1);
 	} else {
 		LOG_ERR("Not supported:  cpol=%d, cpha=%d\n", data->cpol, data->cpha);
 		return -ENOTSUP;
@@ -400,6 +402,7 @@ int spi_pico_pio_init(const struct device *dev)
 		.mosi_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, mosi_gpios, {0}),                      \
 		.miso_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, miso_gpios, {0}),                      \
 		.clock_freq = DT_INST_PROP_BY_PHANDLE(inst, clocks, clock_frequency),              \
+		.sio = DT_INST_PROP(inst, sio),						                               \
 	};                                                                                         \
                                                                                                    \
 	static struct spi_pico_pio_data spi_pico_pio_data_##inst = {                               \

@@ -1,0 +1,21 @@
+; Copyright (c) 2023 Stephen Boylan <stephen.boylan@beechwoods.com>
+; SPDX-License-Identifier: Apache-2.0
+
+; RP2040 PIO programs for SPI
+; Delays are used to keep clock symmetric
+; Each version uses 4 clock cycles
+
+; CPOL=0, CPHA=0
+.program spi_mode_0_0
+.side_set 1
+
+    out pins, 1  side 0  [1]
+    in  pins, 1  side 1  [1]
+
+; CPOL=1, CPHA=1
+.program spi_mode_1_1
+.side_set 1
+
+    out x, 1     side 1
+    mov pins, x  side 0 [1]
+    in  pins, 1  side 1
