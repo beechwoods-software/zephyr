@@ -114,6 +114,7 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	uint32_t wrap_target;
 	uint32_t wrap;
 	const pio_program_t *program;
+	bool lsb = false;
 	int rc;
 
 	if (spi_context_configured(&data->spi_ctx, spi_cfg)) {
@@ -126,8 +127,7 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	}
 
 	if (spi_cfg->operation & SPI_TRANSFER_LSB) {
-		LOG_ERR("Unsupported configuration");
-		return -ENOTSUP;
+		lsb = true;
 	}
 
 #if defined(CONFIG_SPI_EXTENDED_MODES)
@@ -208,9 +208,9 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 
 	sm_config_set_clkdiv(&sm_config, clock_div);
 	sm_config_set_in_pins(&sm_config, miso->pin);
-	sm_config_set_in_shift(&sm_config, false, true, data->bits);
+	sm_config_set_in_shift(&sm_config, lsb, true, data->bits);
 	sm_config_set_out_pins(&sm_config, mosi->pin, 1);
-	sm_config_set_out_shift(&sm_config, false, true, data->bits);
+	sm_config_set_out_shift(&sm_config, lsb, true, data->bits);
 	sm_config_set_sideset_pins(&sm_config, clk->pin);
 	sm_config_set_sideset(&sm_config, 1, false, false);
 	sm_config_set_wrap(&sm_config, offset + wrap_target, offset + wrap);
