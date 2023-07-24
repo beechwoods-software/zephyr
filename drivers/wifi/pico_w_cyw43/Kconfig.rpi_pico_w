@@ -31,6 +31,10 @@ config BUILD_WITH_PICOWI
         bool "Use picowi driver implementation"
 	default n
 
+config USE_PICOWI_PIOSPI
+        bool "Use picowi PIO-SPI, but nothing else"
+	default n
+
 config BUILD_CYW43_WITH_ZEPHYR_PIO_SPI
         bool "Use Zephyr's PIO SPI bus"
 	default n
