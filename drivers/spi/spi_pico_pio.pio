@@ -19,3 +19,18 @@
     out x, 1     side 1
     mov pins, x  side 0 [1]
     in  pins, 1  side 1
+
+; This 3-wire code runs at 2 clock cycles per bit
+; 3-wire, CPOL=0, CPHA=0
+.program spi_3_wire_mode_0_0
+.side_set 1
+tx_loop:
+    out pins, 1             side 0
+    jmp x-- tx_loop         side 1
+public tx_end:
+    set pindirs, 0          side 0
+    nop                     side 1
+rx_loop:
+    in pins, 1              side 0
+    jmp y-- lp2             side 1
+public rx_end:

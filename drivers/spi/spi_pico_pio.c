@@ -83,7 +83,6 @@ static inline bool spi_pico_pio_transfer_ongoing(struct spi_pico_pio_data *data)
 	return spi_context_tx_on(&data->spi_ctx) || spi_context_rx_on(&data->spi_ctx);
 }
 
-/* TODO:  Add support for 16- and 32-bit writes */
 static inline void spi_pico_pio_sm_put8(PIO pio, uint sm, uint8_t data)
 {
 	/* Do 8 bit accesses on FIFO, so that write data is byte-replicated. This */
@@ -93,12 +92,39 @@ static inline void spi_pico_pio_sm_put8(PIO pio, uint sm, uint8_t data)
 	*txfifo = data;
 }
 
-/* TODO:  Add support for 16- and 32-bit reads */
+static inline void spi_pico_pio_sm_put16(PIO pio, uint sm, uint16_t data)
+{
+	/* Do 16 bit accesses on FIFO, so that write data is halfword-replicated. This */
+	/* gets us the left-justification for free (for MSB-first shift-out) */
+	io_rw_16 *txfifo = (io_rw_16 *)&pio->txf[sm];
+
+	*txfifo = data;
+}
+
+static inline void spi_pico_pio_sm_put32(PIO pio, uint sm, uint32_t data)
+{
+	io_rw_32 *txfifo = (io_rw_32 *)&pio->txf[sm];
+
+	*txfifo = data;
+}
+
 static inline uint8_t spi_pico_pio_sm_get8(PIO pio, uint sm)
 {
-	/* Do 8 bit accesses on FIFO, so that write data is byte-replicated. This */
-	/* gets us the left-justification for free (for MSB-first shift-out) */
 	io_rw_8 *rxfifo = (io_rw_8 *)&pio->rxf[sm];
+
+	return *rxfifo;
+}
+
+static inline uint16_t spi_pico_pio_sm_get16(PIO pio, uint sm)
+{
+	io_rw_16 *rxfifo = (io_rw_16 *)&pio->rxf[sm];
+
+	return *rxfifo;
+}
+
+static inline uint32_t spi_pico_pio_sm_get32(PIO pio, uint sm)
+{
+	io_rw_32 *rxfifo = (io_rw_32 *)&pio->rxf[sm];
 
 	return *rxfifo;
 }
@@ -126,6 +152,10 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 		return -ENOTSUP;
 	}
 
+	/* Note that SPI_TRANSFER_LSB controls the direction of shift, not the */
+	/* "endianness" of the data.  In MSB mode, the high-order bit of the   */
+	/* most significant byte is sent first;  in LSB mode, the low-order    */
+	/* bit of the least-significant byte is sent first.                    */
 	if (spi_cfg->operation & SPI_TRANSFER_LSB) {
 		lsb = true;
 	}
@@ -139,8 +169,8 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 
 	const int bits = SPI_WORD_SIZE_GET(spi_cfg->operation);
 
-	if (bits != 8) {
-		LOG_ERR("Only 8 bit word size is supported");
+	if ((bits != 8) && (bits != 16) && (bits !=32)) {
+		LOG_ERR("Only 8, 16, and 32 bit word sizes are supported");
 		return -ENOTSUP;
 	}
 
@@ -159,6 +189,10 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	if (spi_cfg->operation & SPI_HALF_DUPLEX) {
 		LOG_ERR("Half-duplex not supported");
 		return -ENOTSUP;
+	}
+
+	if (spi_cfg->operation & SPI_CS_ACTIVE_HIGH) {
+		gpio_set_outover(data->spi_ctx.config->cs.gpio.pin, GPIO_OVERRIDE_INVERT);
 	}
 
 	if (SPI_MODE_GET(spi_cfg->operation) & SPI_MODE_CPOL) {
@@ -253,23 +287,69 @@ static void spi_pico_pio_txrx(const struct device *dev)
 			/* Send 0 in the case of read only operation */
 			txrx = 0;
 
-			if (txbuf) {
-				txrx = ((uint8_t *)txbuf)[data->tx_count];
+			switch (data->dfs) {
+				case 4: {
+					if (txbuf) {
+						txrx = ((uint32_t *)txbuf)[data->tx_count];
+					}
+					spi_pico_pio_sm_put32(data->pio, data->pio_sm, txrx);
+					data->tx_count += 4;
+				}
+
+				case 2: {
+					if (txbuf) {
+						txrx = ((uint16_t *)txbuf)[data->tx_count];
+					}
+					spi_pico_pio_sm_put16(data->pio, data->pio_sm, txrx);
+					data->tx_count += 2;
+				}
+
+				case 1:
+				default: {
+					if (txbuf) {
+						txrx = ((uint8_t *)txbuf)[data->tx_count];
+					}
+					spi_pico_pio_sm_put8(data->pio, data->pio_sm, txrx);
+					data->tx_count++;
+					}
 			}
-			spi_pico_pio_sm_put8(data->pio, data->pio_sm, txrx);
-			data->tx_count++;
 			fifo_cnt++;
 		}
 
 		while ((!pio_sm_is_rx_fifo_empty(data->pio, data->pio_sm)) &&
 		       data->rx_count < chunk_len && fifo_cnt > 0) {
-			txrx = spi_pico_pio_sm_get8(data->pio, data->pio_sm);
+			switch (data->dfs) {
+				case 4: {
+					txrx = spi_pico_pio_sm_get32(data->pio, data->pio_sm);
 
-			/* Discard received data if rx buffer not assigned */
-			if (rxbuf) {
-				((uint8_t *)rxbuf)[data->rx_count] = (uint8_t)txrx;
+					/* Discard received data if rx buffer not assigned */
+					if (rxbuf) {
+						((uint32_t *)rxbuf)[data->rx_count] = (uint32_t)txrx;
+					}
+					data->rx_count += 4;
+				}
+
+				case 2: {
+					txrx = spi_pico_pio_sm_get16(data->pio, data->pio_sm);
+
+					/* Discard received data if rx buffer not assigned */
+					if (rxbuf) {
+						((uint16_t *)rxbuf)[data->rx_count] = (uint16_t)txrx;
+					}
+					data->rx_count += 2;
+				}
+
+				case 1:
+				default: {
+					txrx = spi_pico_pio_sm_get8(data->pio, data->pio_sm);
+
+					/* Discard received data if rx buffer not assigned */
+					if (rxbuf) {
+						((uint8_t *)rxbuf)[data->rx_count] = (uint8_t)txrx;
+					}
+					data->rx_count++;
+				}
 			}
-			data->rx_count++;
 			fifo_cnt--;
 		}
 	}
