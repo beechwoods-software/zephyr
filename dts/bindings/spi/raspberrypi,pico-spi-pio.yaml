@@ -24,12 +24,12 @@ properties:
     description: |
       MISO gpio info. Input pin for Master In Slave Out.
 
-  sio:
-    type: boolean
+  sio-gpios:
+    type: phandle-array
     description: |
-      Enable 3-wire mode
+      Single I/O gpio info
 
-      Use MOSI for both sending and receiving data
+      GPIO input/output pin for 3-wire mode.
 
   clocks:
     required: true
