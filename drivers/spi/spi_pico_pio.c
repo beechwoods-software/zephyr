@@ -99,20 +99,19 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_mode_0_0_tx, SPI_SIO_MODE_0_0_TX_WRAP_TARGET
 /* ------------------- */
 
 #define SPI_SIO_MODE_0_0_RX_WRAP_TARGET 0
-#define SPI_SIO_MODE_0_0_RX_WRAP 7
+#define SPI_SIO_MODE_0_0_RX_WRAP 6
 #define SPI_SIO_MODE_0_0_RX_CYCLES 4
 
 RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_mode_0_0_rx, SPI_SIO_MODE_0_0_RX_WRAP_TARGET,
 	SPI_SIO_MODE_0_0_RX_WRAP,
             /*     .wrap_target */
     0x80a0, /*  0: pull   block           side 0 */
-    0x6020, /*  1: out    x, 32           side 0 */
-    0xe047, /*  2: set    y, 7            side 0 */
-    0xb142, /*  3: nop                    side 1 [1] */
-    0x4001, /*  4: in     pins, 1         side 0 */
-    0x0083, /*  5: jmp    y--, 3          side 0 */
-    0x8020, /*  6: push   block           side 0 */
-    0x0042, /*  7: jmp    x--, 2          side 0 */
+    0x6040, /*  1: out    y, 32           side 0 */
+    0xb142, /*  2: nop                    side 1 [1] */
+    0x4001, /*  3: in     pins, 1         side 0 */
+    0x0082, /*  4: jmp    y--, 2          side 0 */
+    0x8020, /*  5: push   block           side 0 */
+    0x0040, /*  6: jmp    x--, 0          side 0 */
             /*     .wrap */
 );
 
