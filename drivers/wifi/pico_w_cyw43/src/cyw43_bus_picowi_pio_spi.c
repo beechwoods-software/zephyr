@@ -19,6 +19,7 @@
 #include <zephyr/drivers/spi.h>
 
 #include "picowi/picowi_pio.h"
+#include "picowi/picowi_pico.h"
 
 //#define DT_DRV_COMPAT infineon_cyw43
 
@@ -43,7 +44,8 @@
 #endif
 
 #ifndef NDEBUG
-#define ENABLE_SPI_DUMPING 1
+//#define ENABLE_SPI_DUMPING 1
+#define ENABLE_SPI_DUMPING 0
 #endif
 
 // Set to 1 to enable
@@ -58,36 +60,20 @@ static bool enable_spi_packet_dumping=true; // set to true to dump
 //static uint32_t counter = 0;
 #else
 #define DUMP_SPI_TRANSACTIONS(A)
+#undef CYW43_VDEBUG
+#define CYW43_VDEBUG(...)
+#undef CYW43_VERBOSE_DEBUG
+#define CYW43_VERBOSE_DEBUG 0
 #endif
 
+#undef SWAP32
+//#define SWAP32(A) (A)
 //#define SWAP32(A) ((((A) & 0xff000000U) >> 8) | (((A) & 0xff0000U) << 8) | (((A) & 0xff00U) >> 8) | (((A) & 0xffU) << 8))
 __force_inline static uint32_t __swap16x2(uint32_t a) {
     __asm ("rev16 %0, %0" : "+l" (a) : : );
     return a;
 }
 #define SWAP32(a) __swap16x2(a)
-
-//static const struct device *gpio = DEVICE_DT_GET(DT_NODELABEL(gpio0));
-
-
-int cyw43_spi_init(cyw43_int_t *self) {
-
-    // Only does something if CYW43_LOGIC_DEBUG=1
-    logic_debug_init();
-
-    cyw43_spi_gpio_setup();
-    
-    pio_init();
-    
-    assert(!self->bus_data);
-    
-    return 0;
-}
-
-void cyw43_spi_deinit(cyw43_int_t *self) {
-  return;
-}
-
 
 #if ENABLE_SPI_DUMPING
 static void dump_bytes(const uint8_t *bptr, uint32_t len) {
@@ -103,6 +89,49 @@ static void dump_bytes(const uint8_t *bptr, uint32_t len) {
     }
 }
 #endif
+
+//static const struct device *gpio = DEVICE_DT_GET(DT_NODELABEL(gpio0));
+
+void picowi_gpio_setup() {
+    printf("picowi_gpio_setup()\n");
+    io_set(SD_ON_PIN, IO_OUT, IO_NOPULL);
+    io_out(SD_ON_PIN, 0);
+    io_set(SD_CS_PIN, IO_OUT, IO_NOPULL);
+    io_out(SD_CS_PIN, 1);
+    io_set(SD_CLK_PIN, IO_OUT, IO_NOPULL);
+    io_out(SD_CLK_PIN, 0);
+    io_set(SD_CMD_PIN, IO_OUT, IO_NOPULL);
+    io_out(SD_CMD_PIN, 0);
+    k_busy_wait(100000);
+    io_out(SD_ON_PIN, 1);
+    k_busy_wait(50000);
+    io_set(SD_CMD_PIN, IO_IN, IO_PULLUP);
+    io_set(SD_IRQ_PIN, IO_IN, IO_NOPULL);
+}
+
+int cyw43_spi_init(cyw43_int_t *self) {
+
+    printf("\n\nRunning with the picowi PIO-SPI low level interface\n\n\n");
+    
+    // Only does something if CYW43_LOGIC_DEBUG=1
+    logic_debug_init();
+
+    gpio_set_input_hysteresis_enabled(SD_DIN_PIN, true);
+
+    k_busy_wait(2000);
+    
+    picowi_gpio_setup();
+      
+    pio_init();
+
+    assert(!self->bus_data);
+    
+    return 0;
+}
+
+void cyw43_spi_deinit(cyw43_int_t *self) {
+  return;
+}
 
 
 int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, uint8_t *rx,
@@ -127,20 +156,40 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
       else {
 	tx_only=true;
       }
-      
-      gpio_put(CS_PIN, false);
-      
-      pio_spi_write((unsigned char *)tx, (int)tx_length);
-      DUMP_SPI_TRANSACTIONS(
-	    printf("TXed:");
-            dump_bytes(tx, tx_length);
-            printf("\n");
-      )
     }
+
+    if (rx == NULL) {
+      tx_only=true;
+    }
+    
+    //gpio_put(CS_PIN, false);
+
+    io_out(CS_PIN, 0);
+    
+    pio_spi_write((unsigned char *)tx, (int)(tx_length * 8));
+    //pio_spi_write((unsigned char *)tx, 32);
+    DUMP_SPI_TRANSACTIONS(
+      printf("TXed:");
+      dump_bytes(tx, tx_length);
+      printf("\n");
+    )
     
     if (!tx_only) {
       memset(rx, 0, rx_length);
-      pio_spi_read((unsigned char *)rx, (int)rx_length);
+
+      //pio_spi_read((unsigned char *)rx, (int)(rx_length *8));
+      int i;
+      for (i=0; i<rx_length; i+=8) {
+	pio_spi_read((unsigned char *)(rx + i + 4), 32);
+	pio_spi_read((unsigned char *)(rx + i), 32);
+      }
+
+      if (i > rx_length) {
+	int bytes_remaining = i - rx_length;
+	//printf("i=%d, bytes_remaining=%d\n", i, bytes_remaining);
+	pio_spi_read((unsigned char *)(rx + i - 8), bytes_remaining *8 );
+      }
+      
       DUMP_SPI_TRANSACTIONS(
 	    printf("RXed:");
             dump_bytes(rx, rx_length);
@@ -149,14 +198,17 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
 
     }
     
-    gpio_put(CS_PIN, true);
+    //gpio_put(CS_PIN, true);
+    io_out(SD_CS_PIN, 1);
     
     return 0;
 }
 
 // Initialise our gpios
 void cyw43_spi_gpio_setup(void) {
+  return;
   printf("cyw43_spi_gpio_setup()\n");
+
     // Setup WL_REG_ON (23)
     gpio_init(WL_REG_ON);
     gpio_set_dir(WL_REG_ON, GPIO_OUT);
@@ -193,16 +245,18 @@ void cyw43_spi_gpio_setup(void) {
     gpio_set_dir(DATA_OUT_PIN, GPIO_IN);
     gpio_set_dir(IRQ_PIN, GPIO_IN);
 #endif
+
 }
 
 // Reset wifi chip
 void cyw43_spi_reset(void) {
+  return;
   printf("cyw43_spi_reset()\n");
     gpio_put(WL_REG_ON, false); // off
-    k_sleep(K_MSEC(20));
+    k_busy_wait(20000);
     gpio_put(WL_REG_ON, true); // on
-    k_sleep(K_MSEC(250));
-
+    k_busy_wait(250000);
+ 
     // Setup IRQ (24) - also used for DO, DI
     gpio_init(IRQ_PIN);
     //gpio_set_dir(DATA_OUT_PIN, GPIO_IN);

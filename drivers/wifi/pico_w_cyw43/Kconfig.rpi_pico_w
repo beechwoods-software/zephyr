@@ -11,10 +11,13 @@ menuconfig WIFI_RPIPICOWCYW43
 	select NET_OFFLOAD
 	select NET_SOCKETS
 	imply NET_SOCKETS_OFFLOAD
-	select GPIO
-	select SPI # TODO: Seems like the line below should do this too?
-	select SPI_PICO_PIO
-	#select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
+
+        #comment these three out to use the picowi pio-spi
+	#select GPIO
+	#select SPI # TODO: Seems like the line below should do this too?
+	#select SPI_PICO_PIO
+	
+        select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
 	#select PICOSDK_USE_DMA
 	#select PICOSDK_USE_CLAIM
 	#select PICOSDK_USE_GPIO	
@@ -26,10 +29,6 @@ config WIFI_RPIPICOWCYW43_SHELL
 	depends on SHELL
 	help
 	  Enable CYW43 shell
-
-config BUILD_WITH_PICOWI
-        bool "Use picowi driver implementation"
-	default n
 
 config USE_PICOWI_PIOSPI
         bool "Use picowi PIO-SPI, but nothing else"

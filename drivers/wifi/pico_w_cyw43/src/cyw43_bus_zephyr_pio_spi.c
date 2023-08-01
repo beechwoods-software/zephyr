@@ -87,7 +87,7 @@ int cyw43_spi_init(cyw43_int_t *self) {
 
   struct cyw43_pio_spi_data *spi = &cyw43_pio_spi0; /* Static instance */
   const struct cyw43_pio_spi_config *cfg = &cyw43_config_pio_spi0; /* Static instance */
-
+  printf("\n\nRunning with the Zephyr PIO-SPI low level interface\n\n\n");
 
     // Only does something if CYW43_LOGIC_DEBUG=1
     logic_debug_init();

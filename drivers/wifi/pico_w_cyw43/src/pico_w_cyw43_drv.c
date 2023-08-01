@@ -11,21 +11,8 @@
 
 #include "pico_w_cyw43_drv.h"
 
-#if defined(CONFIG_BUILD_WITH_PICOWI)
-#include "picowi/picowi_evtnum.h"
-#include "picowi/picowi_ioctl.h"
-#include "picowi/picowi_defs.h"
-#include "picowi/picowi_pio.h"
-#include "picowi/picowi_wifi.h"
-#include "picowi/picowi_init.h"
-#include "picowi/picowi_pico.h"
-#include "picowi/picowi_scan.h"
-#include "picowi/picowi_join.h"
-
-#else
 #include "georgerobotics/cyw43.h"
 #include "georgerobotics/cyw43_country.h"
-#endif // CONFIG_BUILD_WITH_PICOWI
 
 #define DT_DRV_COMPAT infineon_cyw43
 
@@ -48,7 +35,7 @@ static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
 
 static struct pico_w_cyw43_dev pico_w_cyw43_0; /* static instance */
 
-#if defined(CONFIG_BUILD_WITH_PICOWI)  
+#if 0 // Just leaving this here for now in case interrupts give us trouble and we need to poll instead.  
 #define EVENT_POLL_THREAD_STACK_SIZE 1024
 #define EVENT_POLL_THREAD_PRIO 2
 K_KERNEL_STACK_MEMBER(pico_w_cyw43_event_poll_stack, EVENT_POLL_THREAD_STACK_SIZE);
@@ -104,18 +91,6 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43, bool active
         pico_w_cyw43_lock(pico_w_cyw43);
 
 
-#if defined(CONFIG_BUILD_WITH_PICOWI)	
-	char *data;
-	int i, ret;
-
-	uint32_t led_ticks, poll_ticks;
-
-	if (!scan_start()) {
-	  LOG_ERR("Error: can't start scan\n");
-	  pico_w_cyw43->scan_cb(pico_w_cyw43->iface, -EIO, NULL);
-	}
-	wifi_set_led(true);	
-#else
 	if (!cyw43_wifi_scan_active(&cyw43_state)) {
 	  cyw43_wifi_scan_options_t scan_options = {0};
 	  scan_options.scan_type = (active ? 0 : 1);
@@ -128,7 +103,6 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43, bool active
 	    LOG_ERR("Failed to start scan: %d\n", err);
 	  }
 	} 
-#endif // CONFIG_BUILD_WITH_PICOWI
 
 	/* WiFi scan is done. */
 	
@@ -145,51 +119,19 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 	LOG_DBG("Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_lock(pico_w_cyw43);
 
-#if defined(CONFIG_BUILD_WITH_PICOWI)
-    uint32_t led_ticks, poll_ticks;
-    bool ledon=false;
-    add_event_handler(my_join_event_handler);
-    add_event_handler(join_event_handler);
+	const uint8_t *ssid = (const uint8_t *)pico_w_cyw43->sta.ssid;
+	const uint8_t *pass = (const uint8_t *)pico_w_cyw43->sta.pass;
 
-    LOG_DBG("io_init()\n");
-    io_init();
-    usdelay(1000);
-    LOG_DBG("join_start(%s, %s);\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
-    if (!join_start(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass)) {
-        LOG_ERR("Error: can't start network join\n");
-    }
-    else {
-        while (1) {
-            // Toggle LED at 1 Hz if joined, 5 Hz if not
-            if (mstimeout(&led_ticks, 50))
-            {
-                // LOG_DBG("wifi_set_led\n");
-                wifi_set_led(ledon = !ledon);
-            }
+	//TODO: might have to implement retry and timeout
+	//if (cyw43_arch_wifi_connect_timeout_ms(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+	if (cyw43_wifi_join(&cyw43_state, strlen(ssid), (const uint8_t *)ssid, pass ? strlen(pass) : 0, (const uint8_t *)pass, CYW43_AUTH_WPA2_AES_PSK, NULL, CYW43_CHANNEL_NONE)) {
+	  LOG_ERR("failed to connect.\n");
+	  return 1;
+	} else {
+	  LOG_DBG("Connected.\n");
+	}
 
-            // Get any events, poll the joining state machine
-            if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
-                // LOG_DBG("+++ EVENT \n");
-                if (event_poll() < 0) break;
-                join_state_poll(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
-                mstimeout(&poll_ticks, 0);
-            }
-        }
-    }
-#else // CONFIG_BUILD_WITH_PICOWI
-    const uint8_t *ssid = (const uint8_t *)pico_w_cyw43->sta.ssid;
-    const uint8_t *pass = (const uint8_t *)pico_w_cyw43->sta.pass;
 
-    //TODO: might have to implement retry and timeout
-    //if (cyw43_arch_wifi_connect_timeout_ms(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-    if (cyw43_wifi_join(&cyw43_state, strlen(ssid), (const uint8_t *)ssid, pass ? strlen(pass) : 0, (const uint8_t *)pass, CYW43_AUTH_WPA2_AES_PSK, NULL, CYW43_CHANNEL_NONE)) {
-        LOG_ERR("failed to connect.\n");
-        return 1;
-    } else {
-        LOG_DBG("Connected.\n");
-    }
-
-#endif
 	LOG_DBG("Done Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_unlock(pico_w_cyw43);
 	return 0;
@@ -200,11 +142,8 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
 	LOG_DBG("Disconnecting from %s", pico_w_cyw43->sta.ssid);
 
 	pico_w_cyw43_lock(pico_w_cyw43);
-#if defined(CONFIG_BUILD_WITH_PICOWI)
-	join_stop();
-#else
 	cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA); 
-#endif // CONFIG_BUILD_WITH_PICOWI
+
         if (false) { goto error; }
 	LOG_DBG("Disconnected!");
 
@@ -225,11 +164,7 @@ static void pico_w_cyw43_status_work(struct k_work *work)
 
 	pico_w_cyw43_lock(pico_w_cyw43);
 
-#if defined(CONFIG_BUILD_WITH_PICOWI)
-	LOG_ERR("picowi implementation of _status_work not implemented\n");
-#else // CONFIG_BUILD_WITH_PICOWI
-	LOG_ERR("GR implementation of _status_work not implemented\n");
-#endif // CONFIG_BUILD_WITH_PICOWI
+	LOG_ERR("pico_w_cyw43_status_work not implemented\n");
 	
 	pico_w_cyw43_unlock(pico_w_cyw43);
 }
@@ -418,10 +353,6 @@ static int pico_w_cyw43_mgmt_ap_disable(const struct device *dev)
   return 0;
 }
 
-#if defined(CONFIG_BUILD_WITH_PICOWI)
-
-#else
-
 void cyw43_cb_tcpip_deinit(cyw43_t *self, int itf)
 {
   LOG_DBG("Calling cyw43_cb_tcpip_deinit(itf=%d)\n", itf);
@@ -554,8 +485,6 @@ void cyw43_await_background_or_timeout_us(uint32_t timeout_us) {
   k_busy_wait(timeout_us);
 }
 
-#endif // CONFIG_BUILD_WITH_PICOWI
-
 struct gpio_callback pico_w_cyw43_gpio_cb;
 
 static void pico_w_cyw43_isr(const struct device *port,
@@ -563,13 +492,6 @@ static void pico_w_cyw43_isr(const struct device *port,
 			    gpio_port_pins_t pins)
 {
   LOG_DBG("Calling pico_w_cyw43_isr()");
-
-#if defined(CONFIG_BUILD_WITH_PICOWI)
-  if (event_poll() < 0) {
-    LOG_DBG("event_poll() returns < 0");
-  }
-    
-#else
 
   // TODO: Should really find the Zephyr equivalent of gpio_get_irq_event_mask
   uint32_t events = gpio_get_irq_event_mask(PICOWCYW43_GPIO_INTERRUPT_PIN);
@@ -585,7 +507,6 @@ static void pico_w_cyw43_isr(const struct device *port,
   else {
     LOG_DBG("Not calling cyw43_poll(), because it doesn't exist.");
   }
-#endif
 }
 
 
@@ -608,47 +529,25 @@ static void pico_w_cyw43_register_cb()
 
 static int pico_w_cyw43_init(const struct device *dev)
 {
-  struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
+    struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
   
-  LOG_DBG("");
+    LOG_DBG("");
 
-  k_mutex_init(&pico_w_cyw43->mutex);
+    k_mutex_init(&pico_w_cyw43->mutex);
 
-  pico_w_cyw43->role = PICOWCYW43_ROLE_CLIENT;
+    pico_w_cyw43->role = PICOWCYW43_ROLE_CLIENT;
     
-  
-#if defined(CONFIG_BUILD_WITH_PICOWI)  
-  add_event_handler(scan_event_handler);
 
-  if (!wifi_setup()) {
-    LOG_DBG("Error: SPI communication");
-    return -ENODEV;
-  }
-  else if (!wifi_init()) {
-    LOG_DBG("Error: can't initialise WiFi");
-    return -ENODEV;
-  }
-  LOG_DBG("Made it through wifi_setup()");
+    cyw43_init(&cyw43_state);
+    // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c:cyw43_driver_init() IRQ setup happens next
 
-  k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
-		  EVENT_POLL_THREAD_STACK_SIZE,
-		  (k_thread_entry_t)pico_w_cyw43_event_poll_thread, pico_w_cyw43, NULL,
-		  NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
-		  K_NO_WAIT);    
-#else
+    pico_w_cyw43_register_cb();
 
-  cyw43_init(&cyw43_state);
-  // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c:cyw43_driver_init() IRQ setup happens next
+    cyw43_set_irq_enabled(true);
 
-  pico_w_cyw43_register_cb();
-
-  cyw43_set_irq_enabled(true);
-
-  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
+    cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
 
 
-#endif // CONFIG_BUILD_WITH_PICOWI
-  
     k_work_queue_start(&pico_w_cyw43->work_q, pico_w_cyw43_work_q_stack,
 		       K_KERNEL_STACK_SIZEOF(pico_w_cyw43_work_q_stack),
 		       CONFIG_SYSTEM_WORKQUEUE_PRIORITY - 1, NULL);

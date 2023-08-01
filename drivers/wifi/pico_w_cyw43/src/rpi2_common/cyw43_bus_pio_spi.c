@@ -4,23 +4,24 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
+#define CYW43_USE_DMA 0
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
-//#include "pico/stdlib.h"
-
-#include "hardware/gpio.h"
 #include "hardware/pio.h"
-#include "hardware/clocks.h"
-#include "hardware/structs/iobank0.h"
-#include "hardware/sync.h"
+
+#if CYW43_USE_DMA
 #include "hardware/dma.h"
+#endif
 #include "cyw43_bus_pio_spi.pio.h"
 #include "cyw43.h"
 #include "cyw43_internal.h"
 #include "cyw43_spi.h"
 #include "cyw43_debug_pins.h"
+
+#include <zephyr/drivers/gpio.h>
 
 #define WHD_BUS_SPI_BACKPLANE_READ_PADD_SIZE        (4)
 
@@ -90,11 +91,15 @@ typedef struct {
     uint8_t pio_func_sel;
     int8_t pio_offset;
     int8_t pio_sm;
+#if CYW43_USE_DMA
     int8_t dma_out;
     int8_t dma_in;
+#endif
 } bus_data_t;
 
 static bus_data_t bus_data_instance;
+
+static const struct device *gpio = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
 int cyw43_spi_init(cyw43_int_t *self) {
     // Only does something if CYW43_LOGIC_DEBUG=1
@@ -115,9 +120,11 @@ int cyw43_spi_init(cyw43_int_t *self) {
     self->bus_data = &bus_data_instance;
     bus_data_t *bus_data = (bus_data_t *)self->bus_data;
     bus_data->pio = pios[pio_index];
+#if CYW43_USE_DMA    
     bus_data->dma_in = -1;
     bus_data->dma_out = -1;
-
+#endif
+    
     static_assert(GPIO_FUNC_PIO1 == GPIO_FUNC_PIO0 + 1, "");
     bus_data->pio_func_sel = GPIO_FUNC_PIO0 + pio_index;
     bus_data->pio_sm = (int8_t)pio_claim_unused_sm(bus_data->pio, false);
@@ -149,20 +156,24 @@ int cyw43_spi_init(cyw43_int_t *self) {
     hw_set_bits(&bus_data->pio->input_sync_bypass, 1u << DATA_IN_PIN);
     pio_sm_set_config(bus_data->pio, bus_data->pio_sm, &config);
     pio_sm_set_consecutive_pindirs(bus_data->pio, bus_data->pio_sm, CLOCK_PIN, 1, true);
+
+#if 0 // Should be taken care of by device tree init   
     gpio_set_function(DATA_OUT_PIN, bus_data->pio_func_sel);
 
     // Set data pin to pull down and schmitt
     gpio_set_pulls(DATA_IN_PIN, false, true);
     gpio_set_input_hysteresis_enabled(DATA_IN_PIN, true);
-
+#endif
     pio_sm_exec(bus_data->pio, bus_data->pio_sm, pio_encode_set(pio_pins, 1));
 
+#if CYW43_USE_DMA    
     bus_data->dma_out = (int8_t) dma_claim_unused_channel(false);
     bus_data->dma_in = (int8_t) dma_claim_unused_channel(false);
     if (bus_data->dma_out < 0 || bus_data->dma_in < 0) {
         cyw43_spi_deinit(self);
         return CYW43_FAIL_FAST_CHECK(-CYW43_EIO);
     }
+#endif
     return 0;
 }
 
@@ -174,6 +185,7 @@ void cyw43_spi_deinit(cyw43_int_t *self) {
                 pio_remove_program(bus_data->pio, &SPI_PROGRAM_FUNC, bus_data->pio_offset);
             pio_sm_unclaim(bus_data->pio, bus_data->pio_sm);
         }
+#if CYW43_USE_DMA
         if (bus_data->dma_out >= 0) {
             dma_channel_unclaim(bus_data->dma_out);
             bus_data->dma_out = -1;
@@ -182,25 +194,35 @@ void cyw43_spi_deinit(cyw43_int_t *self) {
             dma_channel_unclaim(bus_data->dma_in);
             bus_data->dma_in = -1;
         }
+#endif
         self->bus_data = NULL;
     }
 }
 
 static void cs_set(bool value) {
-    gpio_put(CS_PIN, value);
+  //gpio_put(CS_PIN, value);
+  gpio_pin_set(gpio, CS_PIN, value);
 }
 
 static __noinline void ns_delay(uint32_t ns) {
+#if 0
     // cycles = ns * clk_sys_hz / 1,000,000,000
     uint32_t cycles = ns * (clock_get_hz(clk_sys) >> 16u) / (1000000000u >> 16u);
     busy_wait_at_least_cycles(cycles);
+#endif
+    uint32_t us = ns/1000;
+    if (us<1) { us = 1; }
+    k_busy_wait(us);
 }
 
 static void start_spi_comms(cyw43_int_t *self) {
+
+#if 0 // Should be taken care of by device tree init
     bus_data_t *bus_data = (bus_data_t *)self->bus_data;
     gpio_set_function(DATA_OUT_PIN, bus_data->pio_func_sel);
     gpio_set_function(CLOCK_PIN, bus_data->pio_func_sel);
     gpio_pull_down(CLOCK_PIN);
+#endif    
     // Pull CS low
     cs_set(false);
 }
@@ -264,6 +286,7 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
         pio_sm_put(bus_data->pio, bus_data->pio_sm, (rx_length - tx_length) * 8 - 1);
         pio_sm_exec(bus_data->pio, bus_data->pio_sm, pio_encode_out(pio_y, 32));
         pio_sm_exec(bus_data->pio, bus_data->pio_sm, pio_encode_jmp(bus_data->pio_offset));
+#if CYW43_USE_DMA
         dma_channel_abort(bus_data->dma_out);
         dma_channel_abort(bus_data->dma_in);
 
@@ -279,13 +302,17 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
         channel_config_set_write_increment(&in_config, true);
         channel_config_set_read_increment(&in_config, false);
         dma_channel_configure(bus_data->dma_in, &in_config, rx + tx_length, &bus_data->pio->rxf[bus_data->pio_sm], rx_length / 4 - tx_length / 4, true);
+#endif	
 
         pio_sm_set_enabled(bus_data->pio, bus_data->pio_sm, true);
+#if CYW43_USE_DMA	
         __compiler_memory_barrier();
+
 
         dma_channel_wait_for_finish_blocking(bus_data->dma_out);
         dma_channel_wait_for_finish_blocking(bus_data->dma_in);
-
+#endif
+	
         __compiler_memory_barrier();
         memset(rx, 0, tx_length); // make sure we don't have garbage in what would have been returned data if using real SPI
     } else if (tx != NULL) {
@@ -306,6 +333,7 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
         pio_sm_put(bus_data->pio, bus_data->pio_sm, 0);
         pio_sm_exec(bus_data->pio, bus_data->pio_sm, pio_encode_out(pio_y, 32));
         pio_sm_exec(bus_data->pio, bus_data->pio_sm, pio_encode_jmp(bus_data->pio_offset));
+#if CYW43_USE_DMA
         dma_channel_abort(bus_data->dma_out);
 
         dma_channel_config out_config = dma_channel_get_default_config(bus_data->dma_out);
@@ -313,7 +341,8 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
         channel_config_set_dreq(&out_config, pio_get_dreq(bus_data->pio, bus_data->pio_sm, true));
 
         dma_channel_configure(bus_data->dma_out, &out_config, &bus_data->pio->txf[bus_data->pio_sm], tx, tx_length / 4, true);
-
+#endif
+	
         uint32_t fdebug_tx_stall = 1u << (PIO_FDEBUG_TXSTALL_LSB + bus_data->pio_sm);
         bus_data->pio->fdebug = fdebug_tx_stall;
         pio_sm_set_enabled(bus_data->pio, bus_data->pio_sm, true);
@@ -344,6 +373,8 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
 
 // Initialise our gpios
 void cyw43_spi_gpio_setup(void) {
+
+#if 0 // I believe all of this is already done by the device tree init
     // Setup WL_REG_ON (23)
     gpio_init(WL_REG_ON);
     gpio_set_dir(WL_REG_ON, GPIO_OUT);
@@ -358,10 +389,12 @@ void cyw43_spi_gpio_setup(void) {
     gpio_init(CS_PIN);
     gpio_set_dir(CS_PIN, GPIO_OUT);
     gpio_put(CS_PIN, true);
+#endif
 }
 
 // Reset wifi chip
 void cyw43_spi_reset(void) {
+#if 0
     gpio_put(WL_REG_ON, false); // off
     sleep_ms(20);
     gpio_put(WL_REG_ON, true); // on
@@ -370,6 +403,12 @@ void cyw43_spi_reset(void) {
     // Setup IRQ (24) - also used for DO, DI
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_IN);
+#else
+    gpio_pin_set(gpio, WL_REG_ON, false); // off
+    k_sleep(K_MSEC(20));
+    gpio_pin_set(gpio, WL_REG_ON, true); // on
+    k_sleep(K_MSEC(250));
+#endif    
 }
 
 static inline uint32_t make_cmd(bool write, bool inc, uint32_t fn, uint32_t addr, uint32_t sz) {
@@ -423,7 +462,7 @@ static inline uint32_t _cyw43_read_reg(cyw43_int_t *self, uint32_t fn, uint32_t 
         return ret;
     }
     uint32_t result = buf32[padding > 0 ? 2 : 1];
-    CYW43_VDEBUG("cyw43_read_reg_u%d %s 0x%lx=0x%lx\n", size * 8, func_name(fn), reg, result);
+    CYW43_VDEBUG("cyw43_read_reg_u%d %s 0x%lx=0x%lx\n", size * 8, func_name(fn), (unsigned long)reg, (unsigned long)result);
     return result;
 }
 
@@ -446,7 +485,7 @@ int write_reg_u32_swap(cyw43_int_t *self, uint32_t fn, uint32_t reg, uint32_t va
     buf[0] = SWAP32(make_cmd(true, true, fn, reg, 4));
     buf[1] = SWAP32(val);
     int ret = cyw43_spi_transfer(self, (uint8_t *)buf, 8, NULL, 0);
-    CYW43_VDEBUG("write_reg_u32_swap %s 0x%lx=0x%lx\n", func_name(fn), reg, val);
+    CYW43_VDEBUG("write_reg_u32_swap %s 0x%lx=0x%lx\n", func_name(fn), (unsigned long)reg, (unsigned long)val);
     return ret;
 }
 
@@ -472,7 +511,7 @@ static inline int _cyw43_write_reg(cyw43_int_t *self, uint32_t fn, uint32_t reg,
         logic_debug_set(pin_BACKPLANE_WRITE, 0);
     }
 
-    CYW43_VDEBUG("cyw43_write_reg_u%d %s 0x%lx=0x%lx\n", size * 8, func_name(fn), reg, val);
+    CYW43_VDEBUG("cyw43_write_reg_u%d %s 0x%lx=0x%lx\n", size * 8, func_name(fn), (unsigned long)reg, (unsigned long)val);
     return ret;
 }
 
