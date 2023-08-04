@@ -772,9 +772,7 @@ static int cyw43_send_ioctl(cyw43_int_t *self, uint32_t kind, uint32_t cmd, size
     memcpy(self->spid_buf + SDPCM_HEADER_LEN + 16, buf, len);
 
     // do transfer
-    CYW43_VDEBUG("Sending cmd %s (%lu) len %lu flags %lu status %lu\n",
-		 ioctl_cmd_name(header->cmd), (unsigned long)header->cmd, (unsigned long)header->len,
-		 (unsigned long)header->flags, (unsigned long)header->status);
+    CYW43_VDEBUG("Sending cmd %s (%lu) len %lu flags %lu status %lu\n", ioctl_cmd_name(header->cmd), header->cmd, header->len, header->flags, header->status);
     if (header->cmd == WLC_SET_VAR || header->cmd == WLC_GET_VAR) {
         CYW43_VDEBUG("%s %s\n", ioctl_cmd_name(header->cmd), (const char *)buf);
     }
@@ -1470,6 +1468,7 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         cyw43_spi_reset();
         CYW43_EVENT_POLL_HOOK;
 
+	CYW43_DEBUG("Reading test pattern\n");
         // Check test register can be read
         for (int i = 0; i < 10; ++i) {
             uint32_t reg = read_reg_u32_swap(self, BUS_FUNCTION, SPI_READ_TEST_REGISTER);
@@ -1482,22 +1481,26 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         break; // failed
     chip_up:
         // Switch to 32bit mode
-        CYW43_VDEBUG("setting SPI_BUS_CONTROL 0x%lx\n", (unsigned long)val);
+	CYW43_VDEBUG("Switching to 32bit mode\n");
+        CYW43_VDEBUG("setting SPI_BUS_CONTROL 0x%lx\n", (long unsigned int) val);
 
         if (write_reg_u32_swap(self, BUS_FUNCTION, SPI_BUS_CONTROL, val) != 0) {
+	    CYW43_VDEBUG("Break #1\n");
             break;
         }
 
         val = cyw43_read_reg_u32(self, BUS_FUNCTION, SPI_BUS_CONTROL);
-        CYW43_VDEBUG("read SPI_BUS_CONTROL 0x%lx\n", (unsigned long)val);
+        CYW43_VDEBUG("read SPI_BUS_CONTROL 0x%lx\n", (long unsigned int) val);
 
         if (cyw43_write_reg_u8(self, BUS_FUNCTION, SPI_RESP_DELAY_F1, CYW43_BACKPLANE_READ_PAD_LEN_BYTES) != 0) {
+	    CYW43_VDEBUG("Break #2\n");
             break;
         }
 
         // Make sure error interrupt bits are clear
         if (cyw43_write_reg_u8(self, BUS_FUNCTION, SPI_INTERRUPT_REGISTER,
             DATA_UNAVAILABLE | COMMAND_ERROR | DATA_ERROR | F1_OVERFLOW) != 0) {
+	    CYW43_VDEBUG("Break #3\n");
             break;
         }
 
@@ -1508,6 +1511,7 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         cyw43_interrupts |= F1_INTR;
         #endif
         if (cyw43_write_reg_u16(self, BUS_FUNCTION, SPI_INTERRUPT_ENABLE_REGISTER, cyw43_interrupts) != 0) {
+	    CYW43_VDEBUG("Break #4\n");
             break;
         }
 

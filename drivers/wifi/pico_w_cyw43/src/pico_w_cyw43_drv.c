@@ -102,7 +102,10 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43, bool active
 	  } else {
 	    LOG_ERR("Failed to start scan: %d\n", err);
 	  }
-	} 
+	}
+	else {
+	  LOG_INF("\nWifi_scan already active.\n");
+	}
 
 	/* WiFi scan is done. */
 	

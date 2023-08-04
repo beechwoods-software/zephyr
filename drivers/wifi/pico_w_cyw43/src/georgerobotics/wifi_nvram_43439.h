@@ -2,12 +2,22 @@
  * $ Copyright Broadcom Corporation $
  */
 
+#ifndef INCLUDED_NVRAM_IMAGE_H_
+#define INCLUDED_NVRAM_IMAGE_H_
+
+#include <string.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Character array of NVRAM image
  * Generated from cyw943439wlpth_rev1_0.txt
  */
 
-static const uint8_t wifi_nvram_4343[] CYW43_RESOURCE_ATTRIBUTE =
+static const uint8_t wifi_nvram_4343[] __attribute__((aligned(4))) =
         "NVRAMRev=$Rev$"                                                     "\x00"
         "manfid=0x2d0"                                                       "\x00"
         "prodid=0x0727"                                                      "\x00"
@@ -55,3 +65,12 @@ static const uint8_t wifi_nvram_4343[] CYW43_RESOURCE_ATTRIBUTE =
         "glitch_based_crsmin=1"                                              "\x00"
         "btc_mode=1"                                                         "\x00"
         "\x00\x00";
+#ifdef __cplusplus
+} /*extern "C" */
+#endif
+
+#else /* ifndef INCLUDED_NVRAM_IMAGE_H_ */
+
+#error Wi-Fi NVRAM image included twice
+
+#endif /* ifndef INCLUDED_NVRAM_IMAGE_H_ */

@@ -10,9 +10,25 @@
 #define _CYW43_CONFIGPORT_H
 
 #undef NDEBUG
-#define CYW43_VERBOSE_DEBUG 1
-#define CYW43_VDEBUG(...)  CYW43_PRINTF(__VA_ARGS__)
+#define CYW43_VERBOSE_DEBUG 0
+
+#if CYW43_VERBOSE_DEBUG
+  #define CYW43_VDEBUG(...)  CYW43_PRINTF(__VA_ARGS__)
+#else
+  #define CYW43_VDEBUG(...)
+#endif
+
 #define CYW43_DEBUG(...)  CYW43_PRINTF(__VA_ARGS__)
+
+// To enable SPI trace, set ENABLE_SPI_DUMPING to 1
+// _and_ then set it to true at points in the code where you
+// want to enable it and false where you want to disable it.
+#define ENABLE_SPI_DUMPING 0
+#if ENABLE_SPI_DUMPING  
+extern bool enable_spi_packet_dumping;  
+#endif
+
+
 
 #include "pico.h"
 #include "hardware/gpio.h"
