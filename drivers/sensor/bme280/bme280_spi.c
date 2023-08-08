@@ -37,7 +37,8 @@ static int bme280_reg_read_spi(const union bme280_bus *bus,
 	struct spi_buf rx_buf[2];
 	const struct spi_buf_set rx = {
 		.buffers = rx_buf,
-		.count = ARRAY_SIZE(rx_buf)
+//		.count = ARRAY_SIZE(rx_buf)
+		.count = 1
 	};
 	int i;
 
@@ -50,13 +51,17 @@ static int bme280_reg_read_spi(const union bme280_bus *bus,
 		int ret;
 
 		addr = (start + i) | 0x80;
-		rx_buf[1].buf = &buf[i];
+		rx_buf[0].buf = &buf[i];
+
+		printk("bme:  i=%d, buf addr=%p\n", i, rx_buf[1].buf);
 
 		ret = spi_transceive_dt(&bus->spi, &tx, &rx);
 		if (ret) {
 			LOG_DBG("spi_transceive FAIL %d\n", ret);
 			return ret;
 		}
+
+		printk("bme:  result=%d\n", buf[i]);
 	}
 
 	return 0;
