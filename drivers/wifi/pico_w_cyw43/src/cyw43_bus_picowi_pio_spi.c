@@ -46,11 +46,13 @@
 
 // Set to ENABLE_SPI_DUMPING 1 in cyw43_configport.h to enable
 #if ENABLE_SPI_DUMPING //NDEBUG
-bool enable_spi_packet_dumping=true; // set to true to dump
+bool enable_spi_packet_dumping=false; // set to true to dump
 #define DUMP_SPI_TRANSACTIONS(A) if (enable_spi_packet_dumping) {A}
 #else
 #define DUMP_SPI_TRANSACTIONS(A)
 #endif
+
+bool do_ridiculous_byte_reordering=true;
 
 #undef SWAP32
 //#define SWAP32(A) (A)
@@ -183,25 +185,27 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
     if (!tx_only) {
       memset(rx, 0, rx_length);
 
-      //pio_spi_read((unsigned char *)rx, (int)(rx_length *8));
-      int i;
-      for (i=0; i<rx_length; i+=8) {
-	pio_spi_read((unsigned char *)(rx + i + 4), 32);
-	pio_spi_read((unsigned char *)(rx + i), 32);
+      if (do_ridiculous_byte_reordering) {
+	int i;
+	for (i=0; i<rx_length; i+=8) {
+	  pio_spi_read((unsigned char *)(rx + i + 4), 32);
+	  pio_spi_read((unsigned char *)(rx + i), 32);
+	}
+	
+	if (i > rx_length) {
+	  int bits_remaining = i - rx_length;
+	  //printf("i=%d, bits_remaining=%d\n", i, bits_remaining);
+	  pio_spi_read((unsigned char *)(rx + i - 8), bits_remaining *8 );
+	}	
       }
-
-      if (i > rx_length) {
-	int bytes_remaining = i - rx_length;
-	//printf("i=%d, bytes_remaining=%d\n", i, bytes_remaining);
-	pio_spi_read((unsigned char *)(rx + i - 8), bytes_remaining *8 );
+      else  {
+        // pad with 4 bytes of zeros, because why not? ;)	
+	pio_spi_read((unsigned char *)(rx + 4), (int)(rx_length *8));
       }
-      
-      DUMP_SPI_TRANSACTIONS(
-	    printf("RXed:");
-            dump_bytes(rx, rx_length);
-            printf("\n");
-      )
-
+	
+      DUMP_SPI_TRANSACTIONS(printf("RXed:");
+			    dump_bytes(rx, rx_length);
+			    printf("\n");)	
     }
     
     //gpio_put(CS_PIN, true);

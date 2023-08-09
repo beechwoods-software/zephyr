@@ -45,21 +45,19 @@ static void pico_w_cyw43_event_poll_thread(void *p1)
 {
 	struct pico_w_cyw43_dev *pico_w_cyw43 = p1;
 
-	uint32_t led_ticks, poll_ticks;
-
-	
 	LOG_DBG("Starting pico_w_cyw43_event_poll_thread\n");
 
 	k_thread_name_set(NULL, "pico_w_cyw43_event_poll_thread");
 	
 	while (1) {
-	  //if (wifi_get_irq() || mstimeout(&poll_ticks, 10)) {
 	    pico_w_cyw43_lock(pico_w_cyw43);
-
-	    if (event_poll() < 0) {
-	      LOG_DBG("event_poll() returns < 0\n");
+	    if (cyw43_poll) {
+	      LOG_DBG("Calling cyw43_poll() from poll_thread");
+	      cyw43_poll();
 	    }
-	    //}
+	    else {
+	      LOG_DBG("Not calling cyw43_poll() from poll_thread, because it doesn't exist.");
+	    }
 	    pico_w_cyw43_unlock(pico_w_cyw43);
 	    k_sleep(K_MSEC(10));
 	}
@@ -481,13 +479,6 @@ void cyw43_delay_us(uint32_t us) {
   k_busy_wait(us);
 }
 
-void cyw43_await_background_or_timeout_us(uint32_t timeout_us) {
-  if (timeout_us > 1000) {
-    LOG_WRN("warning, calling cyw43_delay_ms() with value %d\n", timeout_us); 
-  }
-  k_busy_wait(timeout_us);
-}
-
 struct gpio_callback pico_w_cyw43_gpio_cb;
 
 static void pico_w_cyw43_isr(const struct device *port,
@@ -504,11 +495,11 @@ static void pico_w_cyw43_isr(const struct device *port,
   
   //Schedule the rest of the work to be done
   if (cyw43_poll) {
-    LOG_DBG("Calling cyw43_poll()");
+    LOG_DBG("Calling cyw43_poll() from cyw43_isr");
     cyw43_poll();
   }
   else {
-    LOG_DBG("Not calling cyw43_poll(), because it doesn't exist.");
+    LOG_DBG("Not calling cyw43_poll() from cyw43_isr, because it doesn't exist.");
   }
 }
 

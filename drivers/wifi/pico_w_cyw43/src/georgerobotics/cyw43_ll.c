@@ -772,7 +772,12 @@ static int cyw43_send_ioctl(cyw43_int_t *self, uint32_t kind, uint32_t cmd, size
     memcpy(self->spid_buf + SDPCM_HEADER_LEN + 16, buf, len);
 
     // do transfer
-    CYW43_VDEBUG("Sending cmd %s (%lu) len %lu flags %lu status %lu\n", ioctl_cmd_name(header->cmd), header->cmd, header->len, header->flags, header->status);
+    CYW43_VDEBUG("Sending cmd %s (%lu) len %lu flags %lu status %lu\n",
+		 ioctl_cmd_name(header->cmd),
+		 (unsigned long int)header->cmd,
+		 (unsigned long int)header->len,
+		 (unsigned long int)header->flags,
+		 (unsigned long int)header->status);
     if (header->cmd == WLC_SET_VAR || header->cmd == WLC_GET_VAR) {
         CYW43_VDEBUG("%s %s\n", ioctl_cmd_name(header->cmd), (const char *)buf);
     }
@@ -1128,6 +1133,9 @@ static int cyw43_ll_sdpcm_poll_device(cyw43_int_t *self, size_t *len, uint8_t **
         self->had_successful_packet = false;
         return -1;
     }
+#if defined(CONFIG_USE_PICOWI_PIOSPI)
+    do_ridiculous_byte_reordering=false;
+#endif
     int ret = cyw43_read_bytes(self, WLAN_FUNCTION, 0, bytes_pending, self->spid_buf);
     if (ret != 0) {
         return ret;

@@ -28,7 +28,11 @@
 extern bool enable_spi_packet_dumping;  
 #endif
 
-
+// This is for the picowi PIO-SPI workaround for more detail, see the comments
+// in cyw43_bus_picowi_pio_spi.c
+#if defined(CONFIG_USE_PICOWI_PIOSPI)
+extern bool do_ridiculous_byte_reordering;
+#endif
 
 #include "pico.h"
 #include "hardware/gpio.h"
@@ -146,8 +150,8 @@ void cyw43_thread_exit(void);
   
 void cyw43_await_background_or_timeout_us(uint32_t timeout_us);
 // todo not 100% sure about the timeouts here; MP uses __WFI which will always wakeup periodically
-#define CYW43_SDPCM_SEND_COMMON_WAIT cyw43_await_background_or_timeout_us(1000);
-#define CYW43_DO_IOCTL_WAIT cyw43_await_background_or_timeout_us(1000);
+#define CYW43_SDPCM_SEND_COMMON_WAIT k_sleep(K_MSEC(1));
+#define CYW43_DO_IOCTL_WAIT k_sleep(K_MSEC(1));
 
 void cyw43_delay_ms(uint32_t ms);
 
