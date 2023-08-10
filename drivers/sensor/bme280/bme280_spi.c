@@ -52,16 +52,11 @@ static int bme280_reg_read_spi(const union bme280_bus *bus,
 
 		addr = (start + i) | 0x80;
 		rx_buf[0].buf = &buf[i];
-
-		printk("bme:  i=%d, buf addr=%p\n", i, rx_buf[1].buf);
-
 		ret = spi_transceive_dt(&bus->spi, &tx, &rx);
 		if (ret) {
 			LOG_DBG("spi_transceive FAIL %d\n", ret);
 			return ret;
 		}
-
-		printk("bme:  result=%d\n", buf[i]);
 	}
 
 	return 0;
