@@ -15,14 +15,3 @@ properties:
   wl-ons:
     type: phandle-array
 
-  miso-gpios:
-    type: phandle-array
-    required: true
-
-  mosi-gpios:
-    type: phandle-array
-    required: true
-
-  int-gpios:
-    type: phandle-array
-    required: true
