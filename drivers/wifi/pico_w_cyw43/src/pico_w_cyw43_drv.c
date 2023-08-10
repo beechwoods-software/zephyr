@@ -35,7 +35,8 @@ static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
 
 static struct pico_w_cyw43_dev pico_w_cyw43_0; /* static instance */
 
-#if 0 // Just leaving this here for now in case interrupts give us trouble and we need to poll instead.  
+#define POLLING_THREAD
+#ifdef POLLING_THREAD // Just leaving this here for now in case interrupts give us trouble and we need to poll instead.  
 #define EVENT_POLL_THREAD_STACK_SIZE 1024
 #define EVENT_POLL_THREAD_PRIO 2
 K_KERNEL_STACK_MEMBER(pico_w_cyw43_event_poll_stack, EVENT_POLL_THREAD_STACK_SIZE);
@@ -43,22 +44,17 @@ K_KERNEL_STACK_MEMBER(pico_w_cyw43_event_poll_stack, EVENT_POLL_THREAD_STACK_SIZ
 struct k_thread event_thread;
 static void pico_w_cyw43_event_poll_thread(void *p1)
 {
-	struct pico_w_cyw43_dev *pico_w_cyw43 = p1;
-
 	LOG_DBG("Starting pico_w_cyw43_event_poll_thread\n");
 
 	k_thread_name_set(NULL, "pico_w_cyw43_event_poll_thread");
 	
 	while (1) {
-	    pico_w_cyw43_lock(pico_w_cyw43);
 	    if (cyw43_poll) {
-	      LOG_DBG("Calling cyw43_poll() from poll_thread");
 	      cyw43_poll();
 	    }
 	    else {
 	      LOG_DBG("Not calling cyw43_poll() from poll_thread, because it doesn't exist.");
 	    }
-	    pico_w_cyw43_unlock(pico_w_cyw43);
 	    k_sleep(K_MSEC(10));
 	}
 	
@@ -73,7 +69,7 @@ uint16_t pbuf_copy_partial(const struct pbuf *p, void *dataptr, uint16_t len, ui
 
 static int process_cyw43_scan_result(void *env, const cyw43_ev_scan_result_t *result) {
     if (result) {
-        LOG_DBG("ssid: %-32s rssi: %4d chan: %3d mac: %02x:%02x:%02x:%02x:%02x:%02x sec: %u\n",
+        printf("ssid: %-32s rssi: %4d chan: %3d mac: %02x:%02x:%02x:%02x:%02x:%02x sec: %u\n",
             result->ssid, result->rssi, result->channel,
             result->bssid[0], result->bssid[1], result->bssid[2], result->bssid[3], result->bssid[4], result->bssid[5],
             result->auth_mode);
@@ -430,20 +426,6 @@ void cyw43_schedule_internal_poll_dispatch(void (*func)(void)) {
   return;
 }
 
-static void cyw43_set_irq_enabled(bool enabled)
-{
-  LOG_DBG("Calling cyw43_set_irq_enabled(%s)", (enabled ? "true" : "false"));
-
-  gpio_pin_interrupt_configure(pico_w_cyw43_cfg.irq_gpio.port, PICOWCYW43_GPIO_INTERRUPT_PIN, (enabled?(GPIO_INT_ENABLE|GPIO_INT_LEVEL_HIGH):GPIO_INT_DISABLE));
-}
-
-
-void cyw43_post_poll_hook(void)
-{
-  LOG_DBG("Calling cyw43_post_poll_hook()");
-  cyw43_set_irq_enabled(true);
-}
-
 void cyw43_thread_enter(void)
 {
   LOG_DBG("Calling cyw43_thread_enter()");
@@ -479,30 +461,49 @@ void cyw43_delay_us(uint32_t us) {
   k_busy_wait(us);
 }
 
+//#define ISR_EVENT_PROCESSING
+#ifdef ISR_EVENT_PROCESSING
+static void cyw43_set_irq_enabled(bool enabled)
+{
+  //LOG_DBG("Calling cyw43_set_irq_enabled(%s)", (enabled ? "true" : "false"));
+
+  gpio_pin_interrupt_configure(pico_w_cyw43_cfg.irq_gpio.port, PICOWCYW43_GPIO_INTERRUPT_PIN, (enabled?(GPIO_INT_ENABLE|GPIO_INT_LEVEL_HIGH):GPIO_INT_DISABLE));
+}
+#endif
+
+void cyw43_post_poll_hook(void)
+{
+#ifdef ISR_EVENT_PROCESSING  
+  cyw43_set_irq_enabled(true);
+#endif
+}
+
+
+#ifdef ISR_EVENT_PROCESSING
 struct gpio_callback pico_w_cyw43_gpio_cb;
 
 static void pico_w_cyw43_isr(const struct device *port,
 			    struct gpio_callback *cb,
 			    gpio_port_pins_t pins)
 {
-  LOG_DBG("Calling pico_w_cyw43_isr()");
+  //LOG_DBG("Calling pico_w_cyw43_isr()");
 
   // TODO: Should really find the Zephyr equivalent of gpio_get_irq_event_mask
   uint32_t events = gpio_get_irq_event_mask(PICOWCYW43_GPIO_INTERRUPT_PIN);
   if (events & GPIO_IRQ_LEVEL_HIGH) { 
-    cyw43_set_irq_enabled(false);
+    //cyw43_set_irq_enabled(false);
+    cyw43_set_irq_enabled(true);
   }
   
   //Schedule the rest of the work to be done
   if (cyw43_poll) {
-    LOG_DBG("Calling cyw43_poll() from cyw43_isr");
+    //LOG_DBG("Calling cyw43_poll() from cyw43_isr");
     cyw43_poll();
   }
   else {
-    LOG_DBG("Not calling cyw43_poll() from cyw43_isr, because it doesn't exist.");
+    //LOG_DBG("Not calling cyw43_poll() from cyw43_isr, because it doesn't exist.");
   }
 }
-
 
 static void pico_w_cyw43_register_cb()
 {
@@ -519,7 +520,7 @@ static void pico_w_cyw43_register_cb()
   
   cyw43_set_irq_enabled(true);
 }
-
+#endif
 
 static int pico_w_cyw43_init(const struct device *dev)
 {
@@ -533,12 +534,15 @@ static int pico_w_cyw43_init(const struct device *dev)
     
 
     cyw43_init(&cyw43_state);
+
+#ifdef ISR_EVENT_PROCESSING
     // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c:cyw43_driver_init() IRQ setup happens next
 
     pico_w_cyw43_register_cb();
 
     cyw43_set_irq_enabled(true);
-
+#endif
+    
     cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
 
 
@@ -549,7 +553,15 @@ static int pico_w_cyw43_init(const struct device *dev)
     k_work_init(&pico_w_cyw43->request_work, pico_w_cyw43_request_work);
     k_work_init_delayable(&pico_w_cyw43->status_work, pico_w_cyw43_status_work);
 
+#ifdef POLLING_THREAD
+    k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
+		    EVENT_POLL_THREAD_STACK_SIZE,
+		    (k_thread_entry_t)pico_w_cyw43_event_poll_thread, (void *)dev, NULL,
+		    NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
+		    K_NO_WAIT);
 
+#endif
+    
     //wifi_set_led(true);
     
     pico_w_cyw43_shell_register(pico_w_cyw43);
