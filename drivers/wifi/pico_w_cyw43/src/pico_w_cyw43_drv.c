@@ -68,6 +68,8 @@ uint16_t pbuf_copy_partial(const struct pbuf *p, void *dataptr, uint16_t len, ui
 }
 
 static int process_cyw43_scan_result(void *env, const cyw43_ev_scan_result_t *result) {
+    //struct pico_w_cyw43_dev *pico_w_cyw43 = &pico_w_cyw43_0;
+    
     if (result) {
         printf("ssid: %-32s rssi: %4d chan: %3d mac: %02x:%02x:%02x:%02x:%02x:%02x sec: %u\n",
             result->ssid, result->rssi, result->channel,
@@ -75,6 +77,9 @@ static int process_cyw43_scan_result(void *env, const cyw43_ev_scan_result_t *re
             result->auth_mode);
     }
     //TODO: return this info to Zephyr
+    //LOG_DBG("calling scan_cb with interface=%s\n", pico_w_cyw43->iface->if_dev->dev->name);
+    //pico_w_cyw43->scan_cb(pico_w_cyw43->iface, 0, NULL);
+
     return 0;
 }
 
