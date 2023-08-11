@@ -252,7 +252,32 @@ static void pico_w_cyw43_iface_init(struct net_if *iface)
 int pico_w_cyw43_iface_status(const struct device *dev,
 			      struct wifi_iface_status *status)
 {
+  struct pico_w_cyw43_dev *pico_w_cyw43 = &pico_w_cyw43_0;
+  
   LOG_DBG("Calling iface_status()\n");
+
+  int link_status=cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+  switch (link_status) {
+  case CYW43_LINK_JOIN:
+    status->state = WIFI_STATE_COMPLETED;
+    break;
+  default:
+    status->state = WIFI_STATE_DISCONNECTED;
+  }
+
+
+  cyw43_wifi_get_bssid(&cyw43_state, (char *) &(status->bssid[0]));
+
+  int rssi;
+  cyw43_wifi_get_rssi(&cyw43_state, (int *) &rssi);
+  status->rssi = rssi;
+  
+  strcpy(status->ssid, (status->state == WIFI_STATE_COMPLETED ? pico_w_cyw43->sta.ssid : ""));
+  status->ssid_len = strlen(pico_w_cyw43->sta.ssid);
+
+  //Because right nbow, we're hard coded to CYW43_AUTH_WPA2_AES_PSK
+  status->security = (status->state ==WIFI_STATE_COMPLETED ? WIFI_SECURITY_TYPE_PSK : WIFI_SECURITY_TYPE_NONE);
+  
   return 0;
 }
 
