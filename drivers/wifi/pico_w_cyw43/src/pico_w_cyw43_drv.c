@@ -235,6 +235,7 @@ static void pico_w_cyw43_iface_init(struct net_if *iface)
   pico_w_cyw43->iface = iface;
   
   //TODO: set MAC address
+  net_if_set_link_addr(iface, cyw43_state.mac, 6, NET_LINK_ETHERNET);  
   
   ethernet_init(iface);
   
@@ -361,7 +362,7 @@ void cyw43_cb_process_ethernet(void *cb_data, int itf, size_t len, const uint8_t
   struct net_pkt *pkt;
   struct pico_w_cyw43_dev *pico_w_cyw43 = &pico_w_cyw43_0;
 
-  LOG_DBG("Calling cyw43_cb_process_ethernet(itf=%d)\n", itf);
+  LOG_DBG("Calling cyw43_cb_process_ethernet(itf=%d, len=%d)\n", itf, len);
 
   if (pico_w_cyw43->iface == NULL) {
     LOG_ERR("network interface unavailable");
@@ -387,7 +388,8 @@ void cyw43_cb_process_ethernet(void *cb_data, int itf, size_t len, const uint8_t
 
   // TODO: Add statistic counters
   
-  return;
+  // TODO: Add statistic counters
+  goto pkt_processing_succeeded;
 
  pkt_processing_failed:
   net_pkt_unref(pkt);
