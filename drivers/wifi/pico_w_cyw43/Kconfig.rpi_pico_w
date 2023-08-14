@@ -13,7 +13,7 @@ menuconfig WIFI_RPIPICOWCYW43
 	imply NET_SOCKETS_OFFLOAD
 
         #comment these three out to use the picowi pio-spi
-	#select GPIO
+	select GPIO
 	#select SPI # TODO: Seems like the line below should do this too?
 	#select SPI_PICO_PIO
 	

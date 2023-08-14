@@ -133,7 +133,7 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 	  LOG_DBG("Connected.\n");
 	}
 
-
+	net_if_carrier_on(pico_w_cyw43->iface);
 	LOG_DBG("Done Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
 	pico_w_cyw43_unlock(pico_w_cyw43);
 	return 0;
@@ -149,26 +149,13 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
         if (false) { goto error; }
 	LOG_DBG("Disconnected!");
 
+	net_if_carrier_off(pico_w_cyw43->iface);
 	pico_w_cyw43_unlock(pico_w_cyw43);
 	return 0;
 
 error:
 	pico_w_cyw43_unlock(pico_w_cyw43);
 	return -EIO;
-}
-
-static void pico_w_cyw43_status_work(struct k_work *work)
-{
-	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
-	struct pico_w_cyw43_dev *pico_w_cyw43;
-	
-	pico_w_cyw43 = CONTAINER_OF(dwork, struct pico_w_cyw43_dev, status_work);
-
-	pico_w_cyw43_lock(pico_w_cyw43);
-
-	LOG_ERR("pico_w_cyw43_status_work not implemented\n");
-	
-	pico_w_cyw43_unlock(pico_w_cyw43);
 }
 
 
@@ -186,8 +173,6 @@ static void pico_w_cyw43_request_work(struct k_work *item)
 	case PICOWCYW43_REQ_CONNECT:
 		err = pico_w_cyw43_connect(pico_w_cyw43);
 		wifi_mgmt_raise_connect_result_event(pico_w_cyw43->iface, err);
-		k_work_reschedule_for_queue(&pico_w_cyw43->work_q, &pico_w_cyw43->status_work,
-					    K_MSEC(1000));
 		break;
 	case PICOWCYW43_REQ_DISCONNECT:
 		err = pico_w_cyw43_disconnect(pico_w_cyw43);
@@ -212,15 +197,25 @@ static int pico_w_cyw43_send(const struct device *dev, struct net_pkt *pkt)
   struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
   
   pico_w_cyw43_lock(pico_w_cyw43);
+
+  LOG_DBG("Calling pico_w_cyw43_send()  -  packet length=%d)\n", net_pkt_get_len(pkt));
   
   // TODO: May want to do do the work in a work queue (example: eswifi_offload.c::eswifi_off_send())
-  
-  rv = cyw43_send_ethernet(&cyw43_state, CYW43_ITF_STA, net_pkt_get_len(pkt), (void *)(pkt->buffer->data), false);
+  const int pkt_len = net_pkt_get_len(pkt);
+
+  /* Read the packet payload */
+  if (net_pkt_read(pkt, pico_w_cyw43->frame_buf, pkt_len) < 0) {
+    rv = -99;
+    goto out;
+  }
+
+  rv = cyw43_send_ethernet(&cyw43_state, CYW43_ITF_STA, pkt_len, (void *)(pico_w_cyw43->frame_buf), false);
+
 
   pico_w_cyw43_unlock(pico_w_cyw43);
 
   // TODO: Should also add statistic counters
-  
+ out:  
   return (rv == 0 ? 0 : -EIO);
 }
 
@@ -239,10 +234,10 @@ static void pico_w_cyw43_iface_init(struct net_if *iface)
   eth_ctx->eth_if_type = L2_ETH_IF_TYPE_WIFI;
   pico_w_cyw43->iface = iface;
   
-  //TODO: set MAC address
   net_if_set_link_addr(iface, cyw43_state.mac, 6, NET_LINK_ETHERNET);  
   
   ethernet_init(iface);
+  net_if_carrier_off(iface);
   
   pico_w_cyw43_unlock(pico_w_cyw43);
 
@@ -583,7 +578,6 @@ static int pico_w_cyw43_init(const struct device *dev)
 		       CONFIG_SYSTEM_WORKQUEUE_PRIORITY - 1, NULL);
    
     k_work_init(&pico_w_cyw43->request_work, pico_w_cyw43_request_work);
-    k_work_init_delayable(&pico_w_cyw43->status_work, pico_w_cyw43_status_work);
 
 #ifdef POLLING_THREAD
     k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,

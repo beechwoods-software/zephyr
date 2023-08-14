@@ -59,7 +59,7 @@ struct pico_w_cyw43_sta {
 struct pico_w_cyw43_bus_ops;
 
 
-
+//TODO: check these for unnecessary/unused fields.
 struct pico_w_cyw43_dev {
 	struct net_if *iface;
 	struct pico_w_cyw43_bus_ops *bus;
@@ -71,6 +71,7 @@ struct pico_w_cyw43_dev {
 	enum pico_w_cyw43_request req;
 	enum pico_w_cyw43_role role;
 	uint8_t mac[6];
+        uint8_t frame_buf[NET_ETH_MAX_FRAME_SIZE];
 	char buf[MAX_DATA_SIZE];
 	struct k_mutex mutex;
 	atomic_val_t mutex_owner;
