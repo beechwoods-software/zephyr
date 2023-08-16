@@ -778,26 +778,24 @@ int spi_pico_pio_init(const struct device *dev)
 	return 0;
 }
 
-#define SPI_PICO_PIO_INIT(inst)                                                                    \
-	PINCTRL_DT_INST_DEFINE(inst);                                                              \
-	static struct spi_pico_pio_config spi_pico_pio_config_##inst = {                           \
-		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)),                                     \
-		.pin_cfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),                                   \
-		.clk_gpio = GPIO_DT_SPEC_INST_GET(inst, clk_gpios),                                \
-		.mosi_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, mosi_gpios, {0}),                      \
-		.miso_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, miso_gpios, {0}),                      \
-		.sio_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, sio_gpios, {0}),                       \
-		.clock_freq = DT_INST_PROP_BY_PHANDLE(inst, clocks, clock_frequency),              \
-	};                                                                                         \
-                                                                                                   \
-	static struct spi_pico_pio_data spi_pico_pio_data_##inst = {                               \
-		SPI_CONTEXT_INIT_LOCK(spi_pico_pio_data_##inst, spi_ctx),                          \
-		SPI_CONTEXT_INIT_SYNC(spi_pico_pio_data_##inst, spi_ctx),                          \
-		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(inst), spi_ctx)};                      \
-                                                                                                   \
-	DEVICE_DT_INST_DEFINE(inst, spi_pico_pio_init, NULL, &spi_pico_pio_data_##inst,            \
-			      &spi_pico_pio_config_##inst, POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,  \
-			      &spi_pico_pio_api);          \
-	BUILD_ASSERT(DT_INST_NODE_HAS_PROP(inst, clk_gpios));                                  
+#define SPI_PICO_PIO_INIT(inst) \
+	PINCTRL_DT_INST_DEFINE(inst); \
+	static struct spi_pico_pio_config spi_pico_pio_config_##inst = { \
+		.piodev = DEVICE_DT_GET(DT_INST_PARENT(inst)), \
+		.pin_cfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst), \
+		.clk_gpio = GPIO_DT_SPEC_INST_GET(inst, clk_gpios), \
+		.mosi_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, mosi_gpios, {0}), \
+		.miso_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, miso_gpios, {0}), \
+		.sio_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, sio_gpios, {0}), \
+		.clock_freq = DT_INST_PROP_BY_PHANDLE(inst, clocks, clock_frequency), \
+	}; \
+	static struct spi_pico_pio_data spi_pico_pio_data_##inst = { \
+		SPI_CONTEXT_INIT_LOCK(spi_pico_pio_data_##inst, spi_ctx), \
+		SPI_CONTEXT_INIT_SYNC(spi_pico_pio_data_##inst, spi_ctx), \
+		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(inst), spi_ctx)}; \
+	DEVICE_DT_INST_DEFINE(inst, spi_pico_pio_init, NULL, &spi_pico_pio_data_##inst, \
+			      &spi_pico_pio_config_##inst, POST_KERNEL, CONFIG_SPI_INIT_PRIORITY, \
+			      &spi_pico_pio_api); \
+	BUILD_ASSERT(DT_INST_NODE_HAS_PROP(inst, clk_gpios));
 
 DT_INST_FOREACH_STATUS_OKAY(SPI_PICO_PIO_INIT)
