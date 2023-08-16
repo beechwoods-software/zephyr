@@ -17,7 +17,7 @@
 
 #define MAX_HEAP_STACKS (CONFIG_HEAP_MEM_POOL_SIZE / STACK_OBJ_SIZE)
 
-ZTEST_DMEM bool flag[CONFIG_DYNAMIC_THREAD_POOL_SIZE];
+ZTEST_DMEM bool tflag[MAX(CONFIG_DYNAMIC_THREAD_POOL_SIZE, MAX_HEAP_STACKS)];
 
 static void func(void *arg1, void *arg2, void *arg3)
 {
@@ -63,16 +63,17 @@ ZTEST(dynamic_thread_stack, test_dynamic_thread_stack_pool)
 
 	/* spawn our threads */
 	for (size_t i = 0; i < CONFIG_DYNAMIC_THREAD_POOL_SIZE; ++i) {
+		tflag[i] = false;
 		tid[i] = k_thread_create(&th[i], stack[i],
 				CONFIG_DYNAMIC_THREAD_STACK_SIZE, func,
-				&flag[i], NULL, NULL, 0,
+				&tflag[i], NULL, NULL, 0,
 				K_USER | K_INHERIT_PERMS, K_NO_WAIT);
 	}
 
 	/* join all threads and check that flags have been set */
 	for (size_t i = 0; i < CONFIG_DYNAMIC_THREAD_POOL_SIZE; ++i) {
 		zassert_ok(k_thread_join(tid[i], K_MSEC(TIMEOUT_MS)));
-		zassert_true(flag[i]);
+		zassert_true(tflag[i]);
 	}
 
 	/* clean up stacks allocated from the pool */
@@ -86,7 +87,6 @@ ZTEST(dynamic_thread_stack, test_dynamic_thread_stack_alloc)
 {
 	size_t N;
 	static k_tid_t tid[MAX_HEAP_STACKS];
-	static bool flag[MAX_HEAP_STACKS];
 	static struct k_thread th[MAX_HEAP_STACKS];
 	static k_thread_stack_t *stack[MAX_HEAP_STACKS];
 
@@ -102,25 +102,24 @@ ZTEST(dynamic_thread_stack, test_dynamic_thread_stack_alloc)
 	for (N = 0; N < MAX_HEAP_STACKS; ++N) {
 		stack[N] = k_thread_stack_alloc(CONFIG_DYNAMIC_THREAD_STACK_SIZE,
 						IS_ENABLED(CONFIG_USERSPACE) ? K_USER : 0);
-		zassert_not_null(stack[N]);
-	}
-
-	if (CONFIG_DYNAMIC_THREAD_POOL_SIZE == 0) {
-		/* ensure that no more thread stacks can be allocated from the heap */
-		zassert_is_null(k_thread_stack_alloc(CONFIG_DYNAMIC_THREAD_STACK_SIZE,
-						     IS_ENABLED(CONFIG_USERSPACE) ? K_USER : 0));
+		if (stack[N] == NULL) {
+			break;
+		}
 	}
 
 	/* spwan our threads */
 	for (size_t i = 0; i < N; ++i) {
-		tid[i] = k_thread_create(&th[i], stack[i], 0, func, &flag[i], NULL, NULL, 0,
+		tflag[i] = false;
+		tid[i] = k_thread_create(&th[i], stack[i],
+					 CONFIG_DYNAMIC_THREAD_STACK_SIZE, func,
+					 &tflag[i], NULL, NULL, 0,
 					 K_USER | K_INHERIT_PERMS, K_NO_WAIT);
 	}
 
 	/* join all threads and check that flags have been set */
 	for (size_t i = 0; i < N; ++i) {
 		zassert_ok(k_thread_join(tid[i], K_MSEC(TIMEOUT_MS)));
-		zassert_true(flag[i]);
+		zassert_true(tflag[i]);
 	}
 
 	/* clean up stacks allocated from the heap */

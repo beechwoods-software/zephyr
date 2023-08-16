@@ -199,8 +199,13 @@ static ALWAYS_INLINE void clock_init(void)
 
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(enet), okay) && CONFIG_NET_L2_ETHERNET
+#if CONFIG_ETH_MCUX_RMII_EXT_CLK
+	/* Enable clock input for ENET1 */
+	IOMUXC_EnableMode(IOMUXC_GPR, kIOMUXC_GPR_ENET1TxClkOutputDir, false);
+#else
 	/* Enable clock output for ENET1 */
 	IOMUXC_EnableMode(IOMUXC_GPR, kIOMUXC_GPR_ENET1TxClkOutputDir, true);
+#endif
 #endif
 
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(enet2), okay) && CONFIG_NET_L2_ETHERNET
@@ -332,14 +337,6 @@ static int imxrt_init(void)
 #ifdef CONFIG_PLATFORM_SPECIFIC_INIT
 void z_arm_platform_init(void)
 {
-#if (DT_DEP_ORD(DT_NODELABEL(ocram)) != DT_DEP_ORD(DT_CHOSEN(zephyr_sram))) && \
-	CONFIG_OCRAM_NOCACHE
-	/* Copy data from flash to OCRAM */
-	memcpy(&__ocram_data_start, &__ocram_data_load_start,
-		(&__ocram_data_end - &__ocram_data_start));
-	/* Zero BSS region */
-	memset(&__ocram_bss_start, 0, (&__ocram_bss_end - &__ocram_bss_start));
-#endif
 	/* Call CMSIS SystemInit */
 	SystemInit();
 }

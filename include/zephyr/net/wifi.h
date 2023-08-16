@@ -135,7 +135,9 @@ static inline const char *wifi_band_txt(enum wifi_frequency_bands band)
 }
 
 #define WIFI_SSID_MAX_LEN 32
+#define WIFI_PSK_MIN_LEN 8
 #define WIFI_PSK_MAX_LEN 64
+#define WIFI_SAE_PSWD_MAX_LEN 128
 #define WIFI_MAC_ADDR_LEN 6
 
 #define WIFI_CHANNEL_MAX 233
@@ -343,9 +345,9 @@ static const char * const wifi_ps_mode2str[] = {
 
 /** Wi-Fi Target Wake Time (TWT) operations. */
 enum wifi_twt_operation {
-	/* TWT setup operation */
+	/** TWT setup operation */
 	WIFI_TWT_SETUP = 0,
-	/* TWT teardown operation */
+	/** TWT teardown operation */
 	WIFI_TWT_TEARDOWN,
 };
 
@@ -356,11 +358,11 @@ static const char * const wifi_twt_operation2str[] = {
 
 /** Wi-Fi Target Wake Time (TWT) negotiation types. */
 enum wifi_twt_negotiation_type {
-	/* TWT individual negotiation */
+	/** TWT individual negotiation */
 	WIFI_TWT_INDIVIDUAL = 0,
-	/* TWT broadcast negotiation */
+	/** TWT broadcast negotiation */
 	WIFI_TWT_BROADCAST,
-	/* TWT wake TBTT negotiation */
+	/** TWT wake TBTT negotiation */
 	WIFI_TWT_WAKE_TBTT
 };
 
@@ -372,23 +374,21 @@ static const char * const wifi_twt_negotiation_type2str[] = {
 
 /** Wi-Fi Target Wake Time (TWT) setup commands. */
 enum wifi_twt_setup_cmd {
-	/** TWT Requests */
-	/* TWT setup request */
+	/** TWT setup request */
 	WIFI_TWT_SETUP_CMD_REQUEST = 0,
-	/* TWT setup suggest (parameters can be changed by AP) */
+	/** TWT setup suggest (parameters can be changed by AP) */
 	WIFI_TWT_SETUP_CMD_SUGGEST,
-	/* TWT setup demand (parameters can not be changed by AP) */
+	/** TWT setup demand (parameters can not be changed by AP) */
 	WIFI_TWT_SETUP_CMD_DEMAND,
-	/** TWT Responses */
-	/* TWT setup grouping (grouping of TWT flows) */
+	/** TWT setup grouping (grouping of TWT flows) */
 	WIFI_TWT_SETUP_CMD_GROUPING,
-	/* TWT setup accept (parameters accepted by AP) */
+	/** TWT setup accept (parameters accepted by AP) */
 	WIFI_TWT_SETUP_CMD_ACCEPT,
-	/* TWT setup alternate (alternate parameters suggested by AP) */
+	/** TWT setup alternate (alternate parameters suggested by AP) */
 	WIFI_TWT_SETUP_CMD_ALTERNATE,
-	/* TWT setup dictate (parameters dictated by AP) */
+	/** TWT setup dictate (parameters dictated by AP) */
 	WIFI_TWT_SETUP_CMD_DICTATE,
-	/* TWT setup reject (parameters rejected by AP) */
+	/** TWT setup reject (parameters rejected by AP) */
 	WIFI_TWT_SETUP_CMD_REJECT,
 };
 

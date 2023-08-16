@@ -9,7 +9,9 @@
 #include <zephyr/fff.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
-
+#if defined(CONFIG_NATIVE_POSIX_SLOWDOWN_TO_REAL_TIME)
+#include "timer_model.h"
+#endif
 #include <lwm2m_rd_client.h>
 
 LOG_MODULE_REGISTER(lwm2m_rd_client_test);
@@ -19,7 +21,7 @@ DEFINE_FFF_GLOBALS;
 /* Maximum number of iterations within the state machine of RD Client
  * service that is waited for until a possible event occurs
  */
-static const uint8_t RD_CLIENT_MAX_LOOKUP_ITERATIONS = 10;
+static const uint8_t RD_CLIENT_MAX_LOOKUP_ITERATIONS = 100;
 
 FAKE_VOID_FUNC(show_lwm2m_event, enum lwm2m_rd_client_event);
 FAKE_VOID_FUNC(show_lwm2m_observe, enum lwm2m_observe_event);
@@ -127,6 +129,12 @@ static void lwm2m_observe_cb(enum lwm2m_observe_event event, struct lwm2m_obj_pa
 
 static void my_suite_before(void *data)
 {
+#if defined(CONFIG_NATIVE_POSIX_SLOWDOWN_TO_REAL_TIME)
+	/* It is enough that some slow-down is happening on sleeps, it does not have to be
+	 * real time
+	 */
+	hwtimer_set_rt_ratio(100.0);
+#endif
 	/* Register resets */
 	DO_FOREACH_FAKE(RESET_FAKE);
 
@@ -135,7 +143,10 @@ static void my_suite_before(void *data)
 
 	RESET_FAKE(show_lwm2m_event);
 	RESET_FAKE(show_lwm2m_observe);
+}
 
+static void my_suite_after(void *data)
+{
 	test_lwm2m_engine_stop_service();
 }
 
@@ -157,7 +168,7 @@ void message_reply_timeout_cb_default(struct lwm2m_message *msg)
 	msg->message_timeout_cb(msg);
 }
 
-ZTEST_SUITE(lwm2m_rd_client, NULL, NULL, my_suite_before, NULL, NULL);
+ZTEST_SUITE(lwm2m_rd_client, NULL, NULL, my_suite_before, my_suite_after, NULL);
 
 ZTEST(lwm2m_rd_client, test_start_registration_ok)
 {
@@ -167,7 +178,6 @@ ZTEST(lwm2m_rd_client, test_start_registration_ok)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -186,7 +196,7 @@ ZTEST(lwm2m_rd_client, test_start_registration_ok)
 
 	coap_header_get_code_fake.custom_fake = coap_header_get_code_fake_deleted;
 	zassert_true(lwm2m_rd_client_stop(&ctx, lwm2m_event_cb, true) == 0, NULL);
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_DISCONNECT, 2), NULL);
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_DISCONNECT, 1), NULL);
 	zassert_true(!lwm2m_rd_client_is_registred(&ctx), NULL);
 }
 
@@ -198,10 +208,8 @@ ZTEST(lwm2m_rd_client, test_timeout_resume_registration)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
-	wait_for_service(1);
 
 	lwm2m_get_bool_fake.custom_fake = lwm2m_get_bool_fake_default;
 	lwm2m_sprint_ip_addr_fake.custom_fake = lwm2m_sprint_ip_addr_fake_default;
@@ -215,7 +223,7 @@ ZTEST(lwm2m_rd_client, test_timeout_resume_registration)
 		     NULL);
 
 	zassert(lwm2m_rd_client_timeout(&ctx) == 0, "");
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE, 2),
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE, 1),
 		     NULL);
 
 }
@@ -228,7 +236,6 @@ ZTEST(lwm2m_rd_client, test_start_registration_timeout)
 
 	test_prepare_pending_message_cb(&message_reply_timeout_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -250,7 +257,6 @@ ZTEST(lwm2m_rd_client, test_start_registration_fail)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -272,7 +278,6 @@ ZTEST(lwm2m_rd_client, test_start_registration_update)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -288,7 +293,7 @@ ZTEST(lwm2m_rd_client, test_start_registration_update)
 		     NULL);
 
 	lwm2m_rd_client_update();
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE, 3),
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE, 2),
 		     NULL);
 }
 
@@ -300,7 +305,6 @@ ZTEST(lwm2m_rd_client, test_rx_off)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -329,7 +333,6 @@ ZTEST(lwm2m_rd_client, test_start_registration_update_fail)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -347,7 +350,7 @@ ZTEST(lwm2m_rd_client, test_start_registration_update_fail)
 	RESET_FAKE(coap_header_get_code);
 
 	lwm2m_rd_client_update();
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE, 3),
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE, 2),
 		     NULL);
 }
 
@@ -359,7 +362,6 @@ ZTEST(lwm2m_rd_client, test_registration_update_timeout)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -376,12 +378,12 @@ ZTEST(lwm2m_rd_client, test_registration_update_timeout)
 
 	test_prepare_pending_message_cb(&message_reply_timeout_cb_default);
 	lwm2m_rd_client_update();
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE, 2));
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_TIMEOUT, 3),
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE, 1));
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_TIMEOUT, 2),
 		     NULL);
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE, 4),
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE, 3),
 		     NULL);
 }
 
@@ -393,7 +395,6 @@ ZTEST(lwm2m_rd_client, test_deregistration_timeout)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -421,7 +422,6 @@ ZTEST(lwm2m_rd_client, test_error_on_registration_update)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -448,7 +448,6 @@ ZTEST(lwm2m_rd_client, test_network_error_on_registration)
 
 	(void)memset(&ctx, 0x0, sizeof(ctx));
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -461,6 +460,8 @@ ZTEST(lwm2m_rd_client, test_network_error_on_registration)
 	coap_packet_append_option_fake.custom_fake = coap_packet_append_option_fake_err;
 	zassert_true(lwm2m_rd_client_start(&ctx, "Test", 0, lwm2m_event_cb, lwm2m_observe_cb) == 0,
 		     NULL);
+	wait_for_service(100);
+
 	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_NETWORK_ERROR, 0), NULL);
 }
 
@@ -472,7 +473,6 @@ ZTEST(lwm2m_rd_client, test_suspend_resume_registration)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -489,11 +489,11 @@ ZTEST(lwm2m_rd_client, test_suspend_resume_registration)
 	zassert_true(!lwm2m_rd_client_is_suspended(&ctx), NULL);
 
 	zassert_true(lwm2m_rd_client_pause() == 0, NULL);
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_ENGINE_SUSPENDED, 2), NULL);
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_ENGINE_SUSPENDED, 1), NULL);
 	zassert_true(lwm2m_rd_client_is_suspended(&ctx), NULL);
 
 	zassert_true(lwm2m_rd_client_resume() == 0, NULL);
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE, 4),
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE, 3),
 		     NULL);
 	zassert_true(!lwm2m_rd_client_is_suspended(&ctx), NULL);
 }
@@ -506,7 +506,6 @@ ZTEST(lwm2m_rd_client, test_socket_error)
 
 	test_prepare_pending_message_cb(&message_reply_cb_default);
 
-	lwm2m_engine_add_service_fake.custom_fake = lwm2m_engine_add_service_fake_default;
 	lwm2m_rd_client_init();
 	test_lwm2m_engine_start_service();
 	wait_for_service(1);
@@ -522,7 +521,7 @@ ZTEST(lwm2m_rd_client, test_socket_error)
 		     NULL);
 
 	ctx.fault_cb(EIO);
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE, 2), NULL);
-	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE, 3),
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE, 1), NULL);
+	zassert_true(check_lwm2m_rd_client_event(LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE, 2),
 		     NULL);
 }

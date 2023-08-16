@@ -41,6 +41,7 @@ else()
 list(APPEND kernel_files
   main_weak.c
   banner.c
+  busy_wait.c
   device.c
   errno.c
   fatal.c
@@ -122,11 +123,11 @@ target_sources_ifdef(
   userspace.c
   )
 
-target_sources_ifdef(
-  CONFIG_DYNAMIC_THREAD
-  kernel PRIVATE
-  dynamic.c
-  )
+if(${CONFIG_DYNAMIC_THREAD})
+  target_sources(kernel PRIVATE dynamic.c)
+else()
+  target_sources(kernel PRIVATE dynamic_disabled.c)
+endif()
 
 target_include_directories(kernel PRIVATE
   ${ZEPHYR_BASE}/kernel/include

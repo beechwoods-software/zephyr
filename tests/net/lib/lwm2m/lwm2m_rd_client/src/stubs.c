@@ -80,35 +80,41 @@ char *lwm2m_sprint_ip_addr_fake_default(const struct sockaddr *addr)
 
 DEFINE_FAKE_VALUE_FUNC(int, lwm2m_server_short_id_to_inst, uint16_t);
 DEFINE_FAKE_VALUE_FUNC(int, lwm2m_security_index_to_inst_id, int);
-DEFINE_FAKE_VALUE_FUNC(int, lwm2m_engine_add_service, k_work_handler_t, uint32_t);
 
-k_work_handler_t lwm2m_engine_add_service_service;
-uint32_t lwm2m_engine_add_service_period_ms = 20;
-int lwm2m_engine_add_service_fake_default(k_work_handler_t service, uint32_t period_ms)
+k_work_handler_t service;
+int64_t next;
+
+int lwm2m_engine_call_at(k_work_handler_t work, int64_t timestamp)
 {
-	lwm2m_engine_add_service_service = service;
-	lwm2m_engine_add_service_period_ms = period_ms;
+	service = work;
+	next = timestamp ? timestamp : 1;
 	return 0;
 }
 
 uint16_t counter = RD_CLIENT_MAX_SERVICE_ITERATIONS;
 struct lwm2m_message *pending_message;
 void *(*pending_message_cb)();
+static bool running;
 
 static void service_work_fn(struct k_work *work)
 {
-	while (lwm2m_engine_add_service_service != NULL) {
+	while (running) {
 		if (pending_message != NULL && pending_message_cb != NULL) {
 			pending_message_cb(pending_message);
 			pending_message = NULL;
 		}
 
-		lwm2m_engine_add_service_service(work);
-		k_sleep(K_MSEC(lwm2m_engine_add_service_period_ms));
+		if (next && next < k_uptime_get()) {
+			printk("Event!\n");
+			next = 0;
+			service(NULL);
+		}
+		k_sleep(K_MSEC(10));
 		counter--;
 
 		/* avoid endless loop if rd client is stuck somewhere */
 		if (counter == 0) {
+			printk("Counter!\n");
 			break;
 		}
 	}
@@ -119,7 +125,7 @@ void wait_for_service(uint16_t cycles)
 	uint16_t end = counter - cycles;
 
 	while (counter > end) {
-		k_sleep(K_MSEC(1));
+		k_sleep(K_MSEC(10));
 	}
 }
 
@@ -127,6 +133,7 @@ K_WORK_DEFINE(service_work, service_work_fn);
 
 void test_lwm2m_engine_start_service(void)
 {
+	running = true;
 	counter = RD_CLIENT_MAX_SERVICE_ITERATIONS;
 	k_work_submit(&service_work);
 }
@@ -134,6 +141,7 @@ void test_lwm2m_engine_start_service(void)
 void test_lwm2m_engine_stop_service(void)
 {
 	pending_message_cb = NULL;
+	running = false;
 	k_work_cancel(&service_work);
 }
 

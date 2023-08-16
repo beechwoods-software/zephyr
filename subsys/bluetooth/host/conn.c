@@ -416,17 +416,23 @@ static struct bt_conn_tx *conn_tx_alloc(void)
 int bt_conn_send_iso_cb(struct bt_conn *conn, struct net_buf *buf,
 			bt_conn_tx_cb_t cb, bool has_ts)
 {
+	if (buf->user_data_size < CONFIG_BT_CONN_TX_USER_DATA_SIZE) {
+		LOG_ERR("not enough room in user_data %d < %d",
+			buf->user_data_size,
+			CONFIG_BT_CONN_TX_USER_DATA_SIZE);
+		return -EINVAL;
+	}
+
+	/* Necessary for setting the TS_Flag bit when we pop the buffer from the
+	 * send queue. The flag needs to be set before adding the buffer to the queue.
+	 */
+	tx_data(buf)->iso_has_ts = has_ts;
+
 	int err = bt_conn_send_cb(conn, buf, cb, NULL);
 
 	if (err) {
 		return err;
 	}
-
-	/* Necessary for setting the TS_Flag bit when we pop the buffer from the
-	 * send queue.
-	 * Size check for the user_data is already done in `bt_conn_send_cb`.
-	 */
-	tx_data(buf)->iso_has_ts = has_ts;
 
 	return 0;
 }
@@ -2169,6 +2175,10 @@ int bt_conn_le_start_encryption(struct bt_conn *conn, uint8_t rand[8],
 {
 	struct bt_hci_cp_le_start_encryption *cp;
 	struct net_buf *buf;
+
+	if (len > sizeof(cp->ltk)) {
+		return -EINVAL;
+	}
 
 	buf = bt_hci_cmd_create(BT_HCI_OP_LE_START_ENCRYPTION, sizeof(*cp));
 	if (!buf) {
