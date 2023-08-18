@@ -437,7 +437,13 @@ void cyw43_cb_tcpip_init(cyw43_t *self, int itf)
 
 void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf)
 {
+  struct net_if *iface;
   LOG_DBG("Calling cyw43_cb_tcpip_set_link_up(itf=%d)", itf);
+
+#if defined(CONFIG_NET_DHCPV4)    
+  iface = net_if_get_default();
+  net_dhcpv4_start(iface);
+#endif  
   return;
 }
 

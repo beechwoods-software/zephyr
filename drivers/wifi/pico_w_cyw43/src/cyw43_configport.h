@@ -37,6 +37,7 @@ extern bool do_ridiculous_byte_reordering;
 #include "pico.h"
 #include "hardware/gpio.h"
 //#include "pico/time.h"
+#include <zephyr/kernel.h>
 #include <time.h>
 
 #ifdef __cplusplus
@@ -94,7 +95,7 @@ extern "C" {
 #define CYW43_ARRAY_SIZE(a) count_of(a)
 
 static inline uint32_t cyw43_hal_ticks_us(void) {
-  return 1000*k_uptime_get_32();
+  return (uint32_t) (1000 * k_uptime_get_32());
 }
 
 static inline uint32_t cyw43_hal_ticks_ms(void) {
