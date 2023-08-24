@@ -205,12 +205,21 @@ static int pico_w_cyw43_send(const struct device *dev, struct net_pkt *pkt)
 
   /* Read the packet payload */
   if (net_pkt_read(pkt, pico_w_cyw43->frame_buf, pkt_len) < 0) {
+    //TODO: what errishould the rv actually be? 
     rv = -99;
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+    pico_w_cyw43->stats.errors.tx++;
+#endif
+
     goto out;
   }
 
   rv = cyw43_send_ethernet(&cyw43_state, CYW43_ITF_STA, pkt_len, (void *)(pico_w_cyw43->frame_buf), false);
 
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+	pico_w_cyw43->stats.bytes.sent += pkt_len;
+	pico_w_cyw43->stats.pkts.tx++;
+#endif
 
   pico_w_cyw43_unlock(pico_w_cyw43);
 
@@ -411,12 +420,20 @@ void cyw43_cb_process_ethernet(void *cb_data, int itf, size_t len, const uint8_t
     goto pkt_processing_failed;
   }
 
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+	pico_w_cyw43->stats.bytes.received += len;
+	pico_w_cyw43->stats.pkts.rx++;
+#endif
+   
   // TODO: Add statistic counters
   
   // TODO: Add statistic counters
   goto pkt_processing_succeeded;
 
  pkt_processing_failed:
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+  pico_w_cyw43->stats.errors.rx++;
+#endif
   net_pkt_unref(pkt);
 
  pkt_processing_succeeded:
@@ -555,6 +572,28 @@ static void pico_w_cyw43_register_cb()
 }
 #endif
 
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+static int pico_w_cyw43_wifi_stats(const struct device *dev, struct net_stats_wifi *stats)
+{
+	struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
+	
+	stats->bytes.received = pico_w_cyw43->stats.bytes.received;
+	stats->bytes.sent = pico_w_cyw43->stats.bytes.sent;
+	stats->pkts.rx = pico_w_cyw43->stats.pkts.rx;
+	stats->pkts.tx = pico_w_cyw43->stats.pkts.tx;
+	stats->errors.rx = pico_w_cyw43->stats.errors.rx;
+	stats->errors.tx = pico_w_cyw43->stats.errors.tx;
+	stats->broadcast.rx = pico_w_cyw43->stats.broadcast.rx;
+	stats->broadcast.tx = pico_w_cyw43->stats.broadcast.tx;
+	stats->multicast.rx = pico_w_cyw43->stats.multicast.rx;
+	stats->multicast.tx = pico_w_cyw43->stats.multicast.tx;
+	stats->sta_mgmt.beacons_rx = pico_w_cyw43->stats.sta_mgmt.beacons_rx;
+	stats->sta_mgmt.beacons_miss = pico_w_cyw43->stats.sta_mgmt.beacons_miss;
+
+	return 0;
+}
+#endif
+
 static int pico_w_cyw43_init(const struct device *dev)
 {
     struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
@@ -608,7 +647,10 @@ static const struct wifi_mgmt_ops pico_w_cyw43_mgmt_api = {
 	.disconnect		   = pico_w_cyw43_mgmt_disconnect,
 	.ap_enable		   = pico_w_cyw43_mgmt_ap_enable,
 	.ap_disable		   = pico_w_cyw43_mgmt_ap_disable,
-	.iface_status		   = pico_w_cyw43_iface_status, 
+	.iface_status		   = pico_w_cyw43_iface_status,
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+	.get_stats	           = pico_w_cyw43_wifi_stats,
+#endif	
 };
 
 static const struct net_wifi_mgmt_offload pico_w_cyw43_callbacks = {

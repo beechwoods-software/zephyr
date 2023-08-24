@@ -71,6 +71,7 @@ struct pico_w_cyw43_dev {
 	enum pico_w_cyw43_request req;
 	enum pico_w_cyw43_role role;
 	uint8_t mac[6];
+        struct net_stats_wifi stats;
         uint8_t frame_buf[NET_ETH_MAX_FRAME_SIZE];
 	char buf[MAX_DATA_SIZE];
 	struct k_mutex mutex;
