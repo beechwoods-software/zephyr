@@ -5,6 +5,7 @@
  */
 
 // This header is included by cyw43_driver to setup its environment
+#include <stdbool.h>
 
 #ifndef _CYW43_CONFIGPORT_H
 #define _CYW43_CONFIGPORT_H
