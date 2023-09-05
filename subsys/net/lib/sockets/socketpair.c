@@ -194,7 +194,7 @@ static void spair_delete(struct spair *spair)
 	/* ensure no private information is released to the memory pool */
 	memset(spair, 0, sizeof(*spair));
 #ifdef CONFIG_NET_SOCKETPAIR_STATIC
-	k_mem_slab_free(&spair_slab, (void **) &spair);
+	k_mem_slab_free(&spair_slab, (void *)spair);
 #elif CONFIG_USERSPACE
 	k_object_free(spair);
 #else
@@ -946,6 +946,22 @@ static int spair_ioctl(void *obj, unsigned int request, va_list args)
 			} else {
 				spair->flags &= ~SPAIR_FLAG_NONBLOCK;
 			}
+
+			res = 0;
+			goto out;
+		}
+
+		case ZFD_IOCTL_FIONBIO: {
+			spair->flags |= SPAIR_FLAG_NONBLOCK;
+			res = 0;
+			goto out;
+		}
+
+		case ZFD_IOCTL_FIONREAD: {
+			int *nbytes;
+
+			nbytes = va_arg(args, int *);
+			*nbytes = spair_read_avail(spair);
 
 			res = 0;
 			goto out;

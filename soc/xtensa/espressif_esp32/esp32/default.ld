@@ -39,13 +39,12 @@
 #define IROM_SEG_ORG 0x400D0020
 #define IROM_SEG_LEN FLASH_SIZE-0x20
 #define IROM_SEG_ALIGN 0x4
-#define IRAM_SEG_LEN 0x20000
 #else
 #define IROM_SEG_ORG 0x400D0000
 #define IROM_SEG_LEN FLASH_SIZE
 #define IROM_SEG_ALIGN 0x10000
-#define IRAM_SEG_LEN 0x13000
 #endif
+#define IRAM_SEG_LEN 0x20000
 
 MEMORY
 {
@@ -453,9 +452,12 @@ SECTIONS
     *libsubsys__net__ip.a:(.noinit .noinit.*)
     *libsubsys__net.a:(.noinit .noinit.*)
 #endif
+    _spiram_heap_start = ABSOLUTE(.);
+    . = . + CONFIG_ESP_SPIRAM_HEAP_SIZE;
 
     *(.ext_ram.bss*)
-    _ext_ram_data_end = ABSOLUTE(.) + CONFIG_ESP_SPIRAM_SIZE;
+
+    _ext_ram_data_end = ABSOLUTE(.);
   } GROUP_LINK_IN(ext_ram_seg)
 #endif
 
@@ -581,3 +583,8 @@ _heap_sentry = 0x3ffe3f20;
 
 ASSERT(((_iram_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),
           "IRAM0 segment data does not fit.")
+
+#if defined(CONFIG_ESP_SPIRAM)
+ASSERT(((_ext_ram_data_end - _ext_ram_data_start) <= CONFIG_ESP_SPIRAM_SIZE),
+          "External SPIRAM overflowed.")
+#endif /* CONFIG_ESP_SPIRAM */

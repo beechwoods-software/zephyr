@@ -17,6 +17,8 @@
 
 #define SRAM_IRAM_START     0x40370000
 #define SRAM_DIRAM_I_START  0x40378000
+/* SRAM_IRAM_END is equivalent 2nd stage bootloader iram_loader_seg
+   start address (that should not be overlapped) */
 #define SRAM_IRAM_END       0x403BA000
 #define I_D_SRAM_OFFSET     (SRAM_DIRAM_I_START - SRAM_DRAM_START)
 
@@ -231,6 +233,7 @@ SECTIONS
   /* This section holds .ext_ram.bss data, and will be put in PSRAM */
   .ext_ram.bss (NOLOAD) :
   {
+    _ext_ram_data_start = ABSOLUTE(.);
     _ext_ram_bss_start = ABSOLUTE(.);
     *(.ext_ram.bss*)
     . = ALIGN(4);
@@ -246,6 +249,10 @@ SECTIONS
     *libsubsys__net__ip.a:(.noinit .noinit.*)
     *libsubsys__net.a:(.noinit .noinit.*)
 #endif
+    _spiram_heap_start = ABSOLUTE(.);
+    . = . + CONFIG_ESP_SPIRAM_HEAP_SIZE;
+
+    _ext_ram_data_end = ABSOLUTE(.);
   } > ext_ram_seg
 #endif
 
@@ -468,7 +475,6 @@ SECTIONS
 
     . = ALIGN(4);
     _end = ABSOLUTE(.);
-    _heap_sentry = .;
     __data_end = ABSOLUTE(.);
   } GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
@@ -635,6 +641,8 @@ SECTIONS
 #include <zephyr/linker/intlist.ld>
 #endif
 
+_heap_sentry = 0x3fceb910;
+
 #include <zephyr/linker/debug-sections.ld>
 
   .xtensa.info  0 :  { *(.xtensa.info) }
@@ -677,6 +685,6 @@ ASSERT(((_iram_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),
           "IRAM0 segment data does not fit.")
 
 #if defined(CONFIG_ESP_SPIRAM)
-ASSERT(((ORIGIN(ext_ram_seg)) > _image_rodata_end),
-          "External RAM segment does not fit.")
-#endif
+ASSERT(((_ext_ram_data_end - _ext_ram_data_start) <= CONFIG_ESP_SPIRAM_SIZE),
+          "External SPIRAM overflowed.")
+#endif /* CONFIG_ESP_SPIRAM */

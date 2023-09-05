@@ -2032,8 +2032,8 @@ static void le_set_cig_parameters(struct net_buf *buf, struct net_buf **evt)
 		status = ll_cig_parameters_commit(cig_id, handles);
 
 		if (status == BT_HCI_ERR_SUCCESS) {
-			for (uint8_t i = 0; i < cis_count; i++) {
-				rp->handle[i] = sys_cpu_to_le16(handles[i]);
+			for (uint8_t j = 0; j < cis_count; j++) {
+				rp->handle[j] = sys_cpu_to_le16(handles[j]);
 			}
 		}
 	}
@@ -2104,8 +2104,8 @@ static void le_set_cig_params_test(struct net_buf *buf, struct net_buf **evt)
 		status = ll_cig_parameters_commit(cig_id, handles);
 
 		if (status == BT_HCI_ERR_SUCCESS) {
-			for (uint8_t i = 0; i < cis_count; i++) {
-				rp->handle[i] = sys_cpu_to_le16(handles[i]);
+			for (uint8_t j = 0; j < cis_count; j++) {
+				rp->handle[j] = sys_cpu_to_le16(handles[j]);
 			}
 		}
 	}
@@ -3527,6 +3527,18 @@ static void le_set_ext_adv_enable(struct net_buf *buf, struct net_buf **evt)
 		*evt = cmd_complete_status(status);
 
 		return;
+	}
+
+	/* Check for duplicate handles */
+	if (IS_ENABLED(CONFIG_BT_CTLR_PARAM_CHECK)) {
+		for (uint8_t i = 0U; i < set_num - 1; i++) {
+			for (uint8_t j = i + 1U; j < set_num; j++) {
+				if (cmd->s[i].handle == cmd->s[j].handle) {
+					*evt = cmd_complete_status(BT_HCI_ERR_INVALID_PARAM);
+					return;
+				}
+			}
+		}
 	}
 
 	s = (void *) cmd->s;
@@ -5666,7 +5678,7 @@ int hci_iso_handle(struct net_buf *buf, struct net_buf **evt)
 
 	iso_hdr = net_buf_pull_mem(buf, sizeof(*iso_hdr));
 	handle = sys_le16_to_cpu(iso_hdr->handle);
-	len = sys_le16_to_cpu(iso_hdr->len);
+	len = bt_iso_hdr_len(sys_le16_to_cpu(iso_hdr->len));
 
 	if (buf->len < len) {
 		LOG_ERR("Invalid HCI ISO packet length");
@@ -5706,7 +5718,8 @@ int hci_iso_handle(struct net_buf *buf, struct net_buf **evt)
 		iso_data_hdr = net_buf_pull_mem(buf, sizeof(*iso_data_hdr));
 		len -= sizeof(*iso_data_hdr);
 		sdu_frag_tx.packet_sn = sys_le16_to_cpu(iso_data_hdr->sn);
-		sdu_frag_tx.iso_sdu_length = sys_le16_to_cpu(iso_data_hdr->slen);
+		sdu_frag_tx.iso_sdu_length =
+			sys_le16_to_cpu(bt_iso_pkt_len(iso_data_hdr->slen));
 	} else {
 		sdu_frag_tx.packet_sn = 0;
 		sdu_frag_tx.iso_sdu_length = 0;

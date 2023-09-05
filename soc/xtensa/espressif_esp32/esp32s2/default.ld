@@ -18,7 +18,9 @@
 #define RAM_IRAM_START    0x40020000
 #define RAM_DRAM_START    0x3ffb0000
 
-#define DATA_RAM_END      0x40000000
+/* DATA_RAM_END is equivalent 2nd stage bootloader iram_loader_seg
+   start address (that should not be overlapped) */
+#define DATA_RAM_END      0x3FFE0000
 
 #define IRAM_ORG    (RAM_IRAM_START + CONFIG_ESP32S2_INSTRUCTION_CACHE_SIZE \
                                     + CONFIG_ESP32S2_DATA_CACHE_SIZE)
@@ -333,6 +335,7 @@ SECTIONS
 #if defined(CONFIG_ESP_SPIRAM)
   .ext_ram.bss (NOLOAD):
   {
+    _ext_ram_data_start = ABSOLUTE(.);
     _ext_ram_bss_start = ABSOLUTE(.);
 
 #if defined(CONFIG_ESP32_WIFI_NET_ALLOC_SPIRAM)
@@ -342,10 +345,14 @@ SECTIONS
     *libsubsys__net__ip.a:(.noinit .noinit.*)
     *libsubsys__net.a:(.noinit .noinit.*)
 #endif
+    _spiram_heap_start = ABSOLUTE(.);
+    . = . + CONFIG_ESP_SPIRAM_HEAP_SIZE;
 
     *(.ext_ram.bss*)
     . = ALIGN(4);
-    _ext_ram_bss_end = ABSOLUTE(.) + CONFIG_ESP_SPIRAM_SIZE;
+    _ext_ram_bss_end = ABSOLUTE(.);
+
+    _ext_ram_data_end = ABSOLUTE(.);
   } > ext_ram_seg
 #endif
 
@@ -555,3 +562,8 @@ ASSERT(((__bss_end - ORIGIN(dram0_0_seg)) <= LENGTH(dram0_0_seg)),
 
 ASSERT(((_iram_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),
           "IRAM0 segment data does not fit.")
+
+#if defined(CONFIG_ESP_SPIRAM)
+ASSERT(((_ext_ram_data_end - _ext_ram_data_start) <= CONFIG_ESP_SPIRAM_SIZE),
+          "External SPIRAM overflowed.")
+#endif /* CONFIG_ESP_SPIRAM */

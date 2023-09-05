@@ -122,7 +122,7 @@ manifest:
       revision: b7955c27e50485b7dafdc3888d7d6afdc2ac6d96
       path: modules/lib/chre
     - name: cmsis
-      revision: 74981bf893e8b10931464b9945e2143d99a3f0a3
+      revision: 1abf29132e608826752e2edd1f4799a065db4031
       path: modules/hal/cmsis
       groups:
         - hal
@@ -142,7 +142,7 @@ manifest:
       groups:
         - hal
     - name: hal_ambiq
-      revision: fe158a4395ba80a9d46c6782e23c277149855a57
+      revision: fbb1618df8b0946cc2abea817309dc85fe051c21
       path: modules/hal/ambiq
       groups:
         - hal
@@ -152,7 +152,7 @@ manifest:
       groups:
         - hal
     - name: hal_espressif
-      revision: ec90f3c49e3826ef2c56c5381aa068c4f482b31f
+      revision: 80d910ca89eab9bce03f59a4ade33f1fc30ce0ad
       path: modules/hal/espressif
       west-commands: west/west-commands.yml
       groups:
@@ -168,12 +168,12 @@ manifest:
       groups:
         - hal
     - name: hal_infineon
-      revision: 0bebc14d8bd1a249ee7fbc70b37db6f01f72544f
+      revision: 815e84a5150f95627201f192779a0180d5052de7
       path: modules/hal/infineon
       groups:
         - hal
     - name: hal_intel
-      revision: b04f13d58bd7b5b9349d6fc2e248679ce1b5579d
+      revision: c72eea412d2563463043a2a6cfe41dc46e845d47
       path: modules/hal/intel
       groups:
         - hal
@@ -183,7 +183,7 @@ manifest:
       groups:
         - hal
     - name: hal_nordic
-      revision: cf6e9fc5f7c2c98df26f2a4227a95df9a50823e7
+      revision: 9ae7c765985ebdea3d9b98c0d3b154794f0b47cf
       path: modules/hal/nordic
       groups:
         - hal
@@ -193,7 +193,7 @@ manifest:
       groups:
         - hal
     - name: hal_nxp
-      revision: 4364ed701eb20af90ed1756414015c4db4416318
+      revision: b0274481021b6343740f1970ef167d65ea67d30b
       path: modules/hal/nxp
       groups:
         - hal
@@ -210,7 +210,7 @@ manifest:
         - hal
     - name: hal_renesas
       path: modules/hal/renesas
-      revision: 346e87d5425f3a12ec8aed87cfc14d949d5ce8c7
+      revision: 61ea3505a470b4e739cad4359ec1401cc4b85805
       groups:
         - hal
     - name: hal_rpi_pico
@@ -224,7 +224,7 @@ manifest:
       groups:
         - hal
     - name: hal_st
-      revision: 5948f7b3304f1628a45ee928cd607619a7f53bbb
+      revision: fb8e79d1a261fd02aadff7c142729f1954163cf3
       path: modules/hal/st
       groups:
         - hal
@@ -249,7 +249,7 @@ manifest:
       groups:
         - hal
     - name: hal_xtensa
-      revision: 41a631d4aeeeaedc0daece21eecc338807296ad7
+      revision: 86b7ddf984d54f34b79f52b328a4fecdae307956
       path: modules/hal/xtensa
       groups:
         - hal
@@ -267,7 +267,7 @@ manifest:
         - fs
       revision: ca583fd297ceb48bced3c2548600dc615d67af24
     - name: loramac-node
-      revision: ce57712f3e426bbbb13acaec97b45369f716f43a
+      revision: 3029c9f304bf46a6e5205f3c8455dbc23108efec
       path: modules/lib/loramac-node
     - name: lvgl
       revision: 8a6a2d1d29d17d1e4bdc94c243c146a39d635fdd
@@ -281,7 +281,7 @@ manifest:
       groups:
         - crypto
     - name: mcuboot
-      revision: fc658eb5a22b7b1721c3b7d0853a7115fae08939
+      revision: 11ecbf639d826c084973beed709a63d51d9b684e
       path: bootloader/mcuboot
     - name: mipi-sys-t
       path: modules/debug/mipi-sys-t
@@ -297,7 +297,7 @@ manifest:
       groups:
         - tools
     - name: nrf_hw_models
-      revision: fa1daebb0f6f7ef135f9d2128590adfd88c0af44
+      revision: 57b61a9a2da75c860f15ca79522b24d57992df2c
       path: modules/bsim_hw_models/nrf_hw_models
     - name: open-amp
       revision: 42b7c577714b8f22ce82a901e19c1814af4609a8

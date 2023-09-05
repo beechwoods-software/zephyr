@@ -670,8 +670,7 @@ static int mod_app_list_handle(struct bt_mesh_msg_ctx *ctx, struct net_buf_simpl
 
 		if (param->member_cnt && param->members) {
 
-			int err =
-				bt_mesh_key_idx_unpack_list(buf, param->members, param->member_cnt);
+			err = bt_mesh_key_idx_unpack_list(buf, param->members, param->member_cnt);
 
 			if (err) {
 				LOG_ERR("The message size for the application opcode is "
@@ -2322,7 +2321,7 @@ struct bt_mesh_comp_p1_elem *bt_mesh_comp_p1_elem_pull(struct net_buf_simple *bu
 						       struct bt_mesh_comp_p1_elem *elem)
 {
 	if (buf->len < 6) {
-		LOG_ERR("No more elements to pull or missing data");
+		LOG_DBG("No more elements to pull or missing data");
 		return NULL;
 	}
 	size_t elem_size = 0;

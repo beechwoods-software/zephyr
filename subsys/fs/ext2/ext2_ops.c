@@ -126,7 +126,7 @@ static int ext2_close(struct fs_file_t *filp)
 		goto out;
 	}
 
-	k_mem_slab_free(&file_struct_slab, (void **)&f);
+	k_mem_slab_free(&file_struct_slab, (void *)f);
 	filp->filep = NULL;
 out:
 	return rc;
@@ -174,8 +174,7 @@ static ssize_t ext2_write(struct fs_file_t *filp, const void *src, size_t nbytes
 static int ext2_lseek(struct fs_file_t *filp, off_t off, int whence)
 {
 	struct ext2_file *f = filp->filep;
-
-	uint32_t new_off = 0;
+	off_t new_off = 0;
 
 	switch (whence) {
 	case FS_SEEK_SET:
@@ -246,9 +245,9 @@ static int ext2_mkdir(struct fs_mount_t *mountp, const char *name)
 
 	const char *path = fs_impl_strip_prefix(name, mountp);
 	struct ext2_lookup_args args = {
-		args.path = path,
-		args.inode = NULL,
-		args.parent = NULL,
+		.path = path,
+		.inode = NULL,
+		.parent = NULL,
 	};
 
 	args.flags = LOOKUP_ARG_CREATE;
@@ -350,7 +349,7 @@ static int ext2_closedir(struct fs_dir_t *dirp)
 	struct ext2_file *dir = dirp->dirp;
 
 	ext2_inode_drop(dir->f_inode);
-	k_mem_slab_free(&file_struct_slab, (void **)&dir);
+	k_mem_slab_free(&file_struct_slab, (void *)dir);
 	return 0;
 }
 
@@ -504,9 +503,9 @@ static int ext2_unlink(struct fs_mount_t *mountp, const char *name)
 
 	const char *path = fs_impl_strip_prefix(name, mountp);
 	struct ext2_lookup_args args = {
-		args.path = path,
-		args.inode = NULL,
-		args.parent = NULL,
+		.path = path,
+		.inode = NULL,
+		.parent = NULL,
 	};
 
 	args.flags = LOOKUP_ARG_UNLINK;

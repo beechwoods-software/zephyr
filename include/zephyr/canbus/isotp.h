@@ -15,9 +15,9 @@
 #define ZEPHYR_INCLUDE_ISOTP_H_
 
 /**
- * @brief CAN ISO-TP Interface
- * @defgroup can_isotp CAN ISO-TP Interface
- * @ingroup CAN
+ * @brief CAN ISO-TP Protocol
+ * @defgroup can_isotp CAN ISO-TP Protocol
+ * @ingroup connectivity
  * @{
  */
 
@@ -391,7 +391,7 @@ struct isotp_send_ctx {
 		};
 	};
 	struct k_work work;
-	struct _timeout timeout;
+	struct k_timer timer;
 	union {
 		struct isotp_callback fin_cb;
 		struct k_sem fin_sem;
@@ -421,7 +421,7 @@ struct isotp_recv_ctx {
 	uint32_t length;
 	int error_nr;
 	struct k_work work;
-	struct _timeout timeout;
+	struct k_timer timer;
 	struct k_fifo fifo;
 	struct isotp_msg_id rx_addr;
 	struct isotp_msg_id tx_addr;

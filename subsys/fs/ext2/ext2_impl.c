@@ -80,7 +80,7 @@ static struct ext2_block *get_block_struct(void)
 	ret = k_mem_slab_alloc(&ext2_block_memory_slab, (void **)&b->data, K_NO_WAIT);
 	if (ret < 0) {
 		LOG_ERR("get block: alloc block memory error %d", ret);
-		k_mem_slab_free(&ext2_block_struct_slab, (void **)&b);
+		k_mem_slab_free(&ext2_block_struct_slab, (void *)b);
 		return NULL;
 	}
 	return b;
@@ -140,8 +140,8 @@ void ext2_drop_block(struct ext2_block *b)
 	}
 
 	if (b != NULL && b->data != NULL) {
-		k_mem_slab_free(&ext2_block_memory_slab, (void **)&b->data);
-		k_mem_slab_free(&ext2_block_struct_slab, (void **)&b);
+		k_mem_slab_free(&ext2_block_memory_slab, (void *)b->data);
+		k_mem_slab_free(&ext2_block_struct_slab, (void *)b);
 	}
 }
 
@@ -823,12 +823,12 @@ int ext2_get_direntry(struct ext2_file *dir, struct fs_dirent *ent)
 		EXT2_DISK_DIRENTRY_BY_OFFSET(inode_current_block_mem(dir->f_inode), block_off);
 	struct ext2_direntry *de = ext2_fetch_direntry(disk_de);
 
-	LOG_DBG("inode=%d name_len=%d rec_len=%d", de->de_inode, de->de_name_len, de->de_rec_len);
-
 	if (de == NULL) {
 		LOG_ERR("Read directory entry name too long");
 		return -EINVAL;
 	}
+
+	LOG_DBG("inode=%d name_len=%d rec_len=%d", de->de_inode, de->de_name_len, de->de_rec_len);
 
 	len = de->de_name_len;
 	if (de->de_name_len > MAX_FILE_NAME) {
@@ -1463,11 +1463,11 @@ int ext2_inode_get(struct ext2_data *fs, uint32_t ino, struct ext2_inode **ret)
 	memset(inode, 0, sizeof(struct ext2_inode));
 
 	if (ino != 0) {
-		int rc = ext2_fetch_inode(fs, ino, inode);
+		int rc2 = ext2_fetch_inode(fs, ino, inode);
 
-		if (rc < 0) {
-			k_mem_slab_free(&inode_struct_slab, (void **)&inode);
-			return rc;
+		if (rc2 < 0) {
+			k_mem_slab_free(&inode_struct_slab, (void *)inode);
+			return rc2;
 		}
 	}
 
@@ -1501,7 +1501,7 @@ int ext2_inode_drop(struct ext2_inode *inode)
 		/* find entry */
 		uint32_t offset = 0;
 
-		while (fs->inode_pool[offset] != inode && offset < MAX_INODES) {
+		while (offset < MAX_INODES && fs->inode_pool[offset] != inode) {
 			offset++;
 		}
 
@@ -1523,7 +1523,7 @@ int ext2_inode_drop(struct ext2_inode *inode)
 			}
 		}
 
-		k_mem_slab_free(&inode_struct_slab, (void **)&inode);
+		k_mem_slab_free(&inode_struct_slab, (void *)inode);
 
 		/* copy last open in place of freed inode */
 		uint32_t last = fs->open_inodes - 1;

@@ -74,7 +74,7 @@ NATIVE_SIMULATOR_IF void nsif_cpu0_boot(void);
  * The embedded SW library may provide this function.
  * to do any cleanup it needs.
  */
-NATIVE_SIMULATOR_IF void nsif_cpu0_cleanup(void);
+NATIVE_SIMULATOR_IF int nsif_cpu0_cleanup(void);
 
 /*
  * Called by the runner each time an interrupt is raised by the HW
@@ -92,6 +92,32 @@ NATIVE_SIMULATOR_IF void nsif_cpu0_irq_raised(void);
  * context of the calling SW thread).
  */
 NATIVE_SIMULATOR_IF void nsif_cpu0_irq_raised_from_sw(void);
+
+#define NSI_CPU_IF_N(i) \
+NATIVE_SIMULATOR_IF void nsif_cpu##i##_pre_cmdline_hooks(void); \
+NATIVE_SIMULATOR_IF void nsif_cpu##i##_pre_hw_init_hooks(void); \
+NATIVE_SIMULATOR_IF void nsif_cpu##i##_boot(void);              \
+NATIVE_SIMULATOR_IF int  nsif_cpu##i##_cleanup(void);           \
+NATIVE_SIMULATOR_IF void nsif_cpu##i##_irq_raised(void);        \
+NATIVE_SIMULATOR_IF void nsif_cpu##i##_irq_raised_from_sw(void);
+
+NSI_CPU_IF_N(1)
+NSI_CPU_IF_N(2)
+NSI_CPU_IF_N(3)
+NSI_CPU_IF_N(4)
+NSI_CPU_IF_N(5)
+NSI_CPU_IF_N(6)
+NSI_CPU_IF_N(7)
+NSI_CPU_IF_N(8)
+NSI_CPU_IF_N(9)
+NSI_CPU_IF_N(10)
+NSI_CPU_IF_N(11)
+NSI_CPU_IF_N(12)
+NSI_CPU_IF_N(13)
+NSI_CPU_IF_N(14)
+NSI_CPU_IF_N(15)
+
+#undef NSI_CPU_IF_N
 
 #ifdef __cplusplus
 }

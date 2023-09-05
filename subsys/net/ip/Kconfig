@@ -72,7 +72,7 @@ config NET_RAW_MODE
 
 if !NET_RAW_MODE
 
-choice
+choice NET_QEMU_NETWORKING
 	prompt "Qemu networking"
 	default NET_QEMU_PPP if NET_PPP
 	default NET_QEMU_SLIP
@@ -858,6 +858,21 @@ config NET_DEFAULT_IF_WIFI
 	depends on NET_L2_ETHERNET
 
 endchoice
+
+config NET_INTERFACE_NAME
+	bool "Allow setting a name to a network interface"
+	default y
+	help
+	  Allow application to set a name to the network interface in order
+	  to simplify network interface management.
+
+config NET_INTERFACE_NAME_LEN
+	int "Network interface max name length"
+	default 8
+	range 1 15
+	depends on NET_INTERFACE_NAME
+	help
+	  Maximum length of the network interface name.
 
 config NET_PKT_TIMESTAMP
 	bool "Network packet timestamp support"

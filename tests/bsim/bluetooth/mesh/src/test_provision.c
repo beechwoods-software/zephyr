@@ -1182,8 +1182,6 @@ static void test_provisioner_pb_remote_client_nppi_robustness(void)
  */
 static void test_device_pb_remote_server_unproved(void)
 {
-	bt_mesh_test_host_files_remove();
-
 	device_pb_remote_server_setup_unproved(&rpr_srv_comp);
 
 	PASS();
@@ -1195,7 +1193,6 @@ static void test_device_pb_remote_server_unproved(void)
  */
 static void test_device_pb_remote_server_unproved_unresponsive(void)
 {
-	bt_mesh_test_host_files_remove();
 	device_pb_remote_server_setup_unproved(&rpr_srv_comp_unresponsive);
 
 	k_sem_init(&pdu_send_sem, 0, 1);
@@ -1306,7 +1303,6 @@ static void test_provisioner_pb_remote_client_ncrp_provision(void)
 	uint16_t pb_remote_server_addr;
 	uint8_t status;
 
-	bt_mesh_test_host_files_remove();
 	provisioner_pb_remote_client_setup();
 
 	/* Provision the 2nd device over PB-Adv. */
@@ -1335,7 +1331,10 @@ static void test_provisioner_pb_remote_client_ncrp_provision(void)
 static void test_provisioner_pb_remote_client_ncrp(void)
 {
 	NET_BUF_SIMPLE_DEFINE(dev_comp_p0, BT_MESH_RX_SDU_MAX);
+	NET_BUF_SIMPLE_DEFINE(dev_comp_p1, BT_MESH_RX_SDU_MAX);
 	NET_BUF_SIMPLE_DEFINE(dev_comp_p128, BT_MESH_RX_SDU_MAX);
+	NET_BUF_SIMPLE_DEFINE(dev_comp_p129, BT_MESH_RX_SDU_MAX);
+
 	uint16_t pb_remote_server_addr = 0x0003;
 	uint8_t page;
 
@@ -1344,13 +1343,20 @@ static void test_provisioner_pb_remote_client_ncrp(void)
 
 	bt_mesh_device_setup(&prov, &rpr_cli_comp);
 
-	/* Store Composition Data Page 0 and 128. */
+	/* Store Composition Data Page 0, 1, 128 and 129. */
 	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 0, &page, &dev_comp_p0));
 	ASSERT_EQUAL(0, page);
+	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 1, &page, &dev_comp_p1));
+	ASSERT_EQUAL(1, page);
 	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 128, &page,
 						&dev_comp_p128));
 	ASSERT_EQUAL(128, page);
+	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 129, &page,
+						&dev_comp_p129));
+	ASSERT_EQUAL(129, page);
 	ASSERT_TRUE(dev_comp_p0.len != dev_comp_p128.len);
+	ASSERT_TRUE(dev_comp_p1.len != dev_comp_p129.len);
+
 
 	LOG_INF("Start Node Composition Refresh procedure...\n");
 	struct bt_mesh_rpr_node srv = {
@@ -1383,7 +1389,42 @@ static void test_provisioner_pb_remote_client_ncrp(void)
 		FAIL("Wrong composition data page 128");
 	}
 
+	/* Check that Composition Data Page 129 still exists and is now equal to Page 1. */
+	net_buf_simple_reset(&dev_comp_p1);
+	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 1, &page, &dev_comp_p1));
+	ASSERT_EQUAL(1, page);
+	ASSERT_EQUAL(dev_comp_p1.len, dev_comp_p129.len);
+	if (memcmp(dev_comp_p1.data, dev_comp_p129.data, dev_comp_p1.len)) {
+		FAIL("Wrong composition data page 1");
+	}
+
+	net_buf_simple_reset(&dev_comp_p129);
+	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 129, &page,
+						&dev_comp_p129));
+	ASSERT_EQUAL(129, page);
+	ASSERT_EQUAL(dev_comp_p1.len, dev_comp_p129.len);
+	if (memcmp(dev_comp_p1.data, dev_comp_p129.data, dev_comp_p1.len)) {
+		FAIL("Wrong composition data page 129");
+	}
+
 	PASS();
+}
+
+static void comp_data_pages_equal_check(uint16_t server_addr, uint8_t page1, uint8_t page2)
+{
+	NET_BUF_SIMPLE_DEFINE(comp_1, BT_MESH_RX_SDU_MAX);
+	NET_BUF_SIMPLE_DEFINE(comp_2, BT_MESH_RX_SDU_MAX);
+	uint8_t page;
+
+	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, server_addr, page1, &page, &comp_1));
+	ASSERT_EQUAL(page1, page);
+	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, server_addr, page2, &page,
+						&comp_2));
+	ASSERT_EQUAL(page2, page);
+	ASSERT_TRUE(comp_1.len == comp_2.len);
+	if (memcmp(comp_1.data, comp_2.data, comp_1.len)) {
+		FAIL("Composition data page %d is not the same as page %d", page1, page2);
+	}
 }
 
 /** @brief Test Node Composition Refresh procedure on Remote Provisioning client:
@@ -1391,10 +1432,7 @@ static void test_provisioner_pb_remote_client_ncrp(void)
  */
 static void test_provisioner_pb_remote_client_ncrp_second_time(void)
 {
-	NET_BUF_SIMPLE_DEFINE(dev_comp_p0, BT_MESH_RX_SDU_MAX);
-	NET_BUF_SIMPLE_DEFINE(dev_comp_p128, BT_MESH_RX_SDU_MAX);
 	uint16_t pb_remote_server_addr = 0x0003;
-	uint8_t page;
 	int err;
 
 	k_sem_init(&prov_sem, 0, 1);
@@ -1402,13 +1440,9 @@ static void test_provisioner_pb_remote_client_ncrp_second_time(void)
 
 	bt_mesh_device_setup(&prov, &rpr_cli_comp);
 
-	/* Check Composition Data Page 0 and 128. */
-	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 0, &page, &dev_comp_p0));
-	ASSERT_EQUAL(0, page);
-	ASSERT_OK(bt_mesh_cfg_cli_comp_data_get(0, pb_remote_server_addr, 128, &page,
-						&dev_comp_p128));
-	ASSERT_EQUAL(128, page);
-	ASSERT_TRUE(dev_comp_p0.len == dev_comp_p128.len);
+	comp_data_pages_equal_check(pb_remote_server_addr, 0, 128);
+	comp_data_pages_equal_check(pb_remote_server_addr, 1, 129);
+
 
 	LOG_INF("Start Node Composition Refresh procedure...\n");
 	struct bt_mesh_rpr_node srv = {
@@ -1433,7 +1467,6 @@ static void test_provisioner_pb_remote_client_ncrp_second_time(void)
  */
 static void test_device_pb_remote_server_ncrp_prepare(void)
 {
-	bt_mesh_test_host_files_remove();
 	device_pb_remote_server_setup_unproved(&rpr_srv_comp);
 
 	LOG_INF("Preparing for Composition Data change");
