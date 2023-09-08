@@ -1,0 +1,9 @@
+config WIFI_SSID
+	string "WIFI SSID - Network name"
+	default ""
+
+config WIFI_PSK
+	string "WIFI PSK - Network password key"
+	default ""
+
+source "Kconfig.zephyr"

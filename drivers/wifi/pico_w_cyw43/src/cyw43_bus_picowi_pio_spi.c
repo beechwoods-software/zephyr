@@ -200,7 +200,7 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
       }
       else  {
         // pad with 4 bytes of zeros, because why not? ;)	
-	pio_spi_read((unsigned char *)(rx + 4), (int)(rx_length *8));
+	pio_spi_read((unsigned char *)(rx + WHD_BUS_SPI_BACKPLANE_READ_PADD_SIZE), (int)(rx_length *8));
       }
 	
       DUMP_SPI_TRANSACTIONS(printf("RXed:");

@@ -23,11 +23,6 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, LOG_LEVEL);
 K_KERNEL_STACK_DEFINE(pico_w_cyw43_work_q_stack, PICOWCYW43_WORKQUEUE_STACK_SIZE);
 
 static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
-#if 0  
-        .data = NULL,
-        .clock = NULL,
-	.power = NULL,
-#endif
 	.irq_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(cyw43_int), gpios),
 };
 
@@ -46,8 +41,6 @@ static void pico_w_cyw43_event_poll_thread(void *p1)
 {
 	LOG_DBG("Starting pico_w_cyw43_event_poll_thread\n");
 
-	k_thread_name_set(NULL, "pico_w_cyw43_event_poll_thread");
-	
 	while (1) {
 	    if (cyw43_poll) {
 	      cyw43_poll();
@@ -265,10 +258,12 @@ int pico_w_cyw43_iface_status(const struct device *dev,
   case CYW43_LINK_JOIN:
     status->state = WIFI_STATE_COMPLETED;
     break;
+  case CYW43_LINK_NONET:
+    status->state = WIFI_STATE_INACTIVE;
+    break;
   default:
     status->state = WIFI_STATE_DISCONNECTED;
   }
-
 
   cyw43_wifi_get_bssid(&cyw43_state, (char *) &(status->bssid[0]));
 
@@ -458,7 +453,7 @@ void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf)
   LOG_DBG("Calling cyw43_cb_tcpip_set_link_up(itf=%d)", itf);
 
 #if defined(CONFIG_NET_DHCPV4)    
-  iface = net_if_get_default();
+  iface = net_if_get_by_index(itf);
   net_dhcpv4_start(iface);
 #endif  
   return;
@@ -466,7 +461,14 @@ void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf)
 
 void cyw43_cb_tcpip_set_link_down(cyw43_t *self, int itf)
 {
+  struct net_if *iface;
+  
   LOG_DBG("Calling cyw43_cb_tcpip_set_link_down(itf=%d)", itf);
+
+#if defined(CONFIG_NET_DHCPV4)    
+  iface = net_if_get_by_index(itf);
+  net_dhcpv4_stop(iface);
+#endif  
   return;
 }
 
@@ -608,7 +610,6 @@ static int pico_w_cyw43_init(const struct device *dev)
     cyw43_init(&cyw43_state);
 
 #ifdef ISR_EVENT_PROCESSING
-    // Based on example in ./pico-sdk/src/rp2_common/pico_cyw43_driver/cyw43_driver.c:cyw43_driver_init() IRQ setup happens next
 
     pico_w_cyw43_register_cb();
 
@@ -617,7 +618,6 @@ static int pico_w_cyw43_init(const struct device *dev)
     
     cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
 
-
     k_work_queue_start(&pico_w_cyw43->work_q, pico_w_cyw43_work_q_stack,
 		       K_KERNEL_STACK_SIZEOF(pico_w_cyw43_work_q_stack),
 		       CONFIG_SYSTEM_WORKQUEUE_PRIORITY - 1, NULL);
@@ -625,12 +625,12 @@ static int pico_w_cyw43_init(const struct device *dev)
     k_work_init(&pico_w_cyw43->request_work, pico_w_cyw43_request_work);
 
 #ifdef POLLING_THREAD
-    k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
-		    EVENT_POLL_THREAD_STACK_SIZE,
-		    (k_thread_entry_t)pico_w_cyw43_event_poll_thread, (void *)dev, NULL,
-		    NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
-		    K_NO_WAIT);
-
+    k_tid_t thread_id = k_thread_create(&event_thread, pico_w_cyw43_event_poll_stack,
+					EVENT_POLL_THREAD_STACK_SIZE,
+					(k_thread_entry_t)pico_w_cyw43_event_poll_thread, (void *)dev, NULL,
+					NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
+					K_NO_WAIT);
+    k_thread_name_set(thread_id, "pico_w_cyw43_event_poll_thread");
 #endif
     
     //wifi_set_led(true);
