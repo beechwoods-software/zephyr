@@ -118,6 +118,20 @@ static int wifi_scan(uint32_t mgmt_request, struct net_if *iface,
 
 NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_WIFI_SCAN, wifi_scan);
 
+#if defined(CONFIG_WIFI_RPIPICOWCYW43)
+static void wifi_set_led(uint32_t mgmt_request, struct net_if *iface,
+		     void *data, size_t len)
+{	const struct device *dev = net_if_get_device(iface);
+	const struct wifi_mgmt_ops *const wifi_mgmt_api = get_wifi_api(iface);
+
+	if (wifi_mgmt_api == NULL || wifi_mgmt_api->set_led == NULL) {
+		return -ENOTSUP;
+	}
+	return wifi_mgmt_api->set_led(dev, len != 0);
+}
+NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_WIFI_SET_LED, wifi_set_led);
+#endif
+
 static int wifi_disconnect(uint32_t mgmt_request, struct net_if *iface,
 			   void *data, size_t len)
 {

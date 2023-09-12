@@ -61,6 +61,9 @@ enum net_request_wifi_cmd {
 	NET_REQUEST_WIFI_CMD_REG_DOMAIN,
 	/** Set power save timeout */
 	NET_REQUEST_WIFI_CMD_PS_TIMEOUT,
+#if defined(CONFIG_WIFI_RPIPICOWCYW43)
+	NET_REQUEST_WIFI_CMD_SET_LED,
+#endif
 	NET_REQUEST_WIFI_CMD_MAX
 };
 
@@ -122,6 +125,13 @@ NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_REG_DOMAIN);
 	(_NET_WIFI_BASE | NET_REQUEST_WIFI_CMD_PS_TIMEOUT)
 
 NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_PS_TIMEOUT);
+
+#if defined(CONFIG_WIFI_RPIPICOWCYW43)
+#define NET_REQUEST_WIFI_SET_LED \
+	(_NET_WIFI_BASE | NET_REQUEST_WIFI_CMD_SET_LED)
+
+NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_SET_LED);
+#endif
 
 /** Wi-Fi management events */
 enum net_event_wifi_cmd {
@@ -453,6 +463,9 @@ struct wifi_mgmt_ops {
 	int (*scan)(const struct device *dev,
 		    struct wifi_scan_params *params,
 		    scan_result_cb_t cb);
+#if defined(CONFIG_WIFI_RPIPICOWCYW43)
+	int (*set_led)(const struct device *dev, bool on);
+#endif
 	/** Connect to a Wi-Fi network
 	 *
 	 * @param dev Pointer to the device structure for the driver instance.
