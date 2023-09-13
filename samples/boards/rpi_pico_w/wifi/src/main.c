@@ -13,7 +13,8 @@
 void wifi_connect(char *ssid, char * passwd) {
     int ret;
     
-    struct net_if *iface = net_if_get_default();
+    struct net_if *iface;
+    iface = net_if_get_default();
     printf("Default interface is %s\n", iface->if_dev->dev->name);
     static struct wifi_connect_req_params req_params = {
         .channel = 0,
@@ -28,12 +29,23 @@ void wifi_connect(char *ssid, char * passwd) {
     printf("%d Finished calling net_mgmt(NET_REQUEST_WIFI_SCAN)\n", ret);
 }
 
+void wifi_set_led(bool on) {
+  struct net_if *iface;
+  iface = net_if_get_default(); 
+
+  printf("Calling net_mgmt(NET_REQUEST_WIFI_SET_LED)\n");
+  if (net_mgmt(NET_REQUEST_WIFI_SET_LED, iface, NULL, on ? 1 : 0)) {
+    printf("wifi set led request failure\n");
+  }
+  
+  printf("Finished calling net_mgmt(NET_REQUEST_WIFI_SET_LED)\n");
+}
+
 int main(void)
 {
 	/* NET_CONFIG_SETTINGS will init DHCP
 	 * NET_SHELL is enabled to test driver and network stack
 	 */
-
   if (strcmp(CONFIG_WIFI_SSID, "") && strcmp(CONFIG_WIFI_PSK, "")) {
     printf("Connecting to network \"%s\"\n", CONFIG_WIFI_SSID);
     wifi_connect(CONFIG_WIFI_SSID, CONFIG_WIFI_PSK);
@@ -49,5 +61,11 @@ int main(void)
     printf("\n");
   }
   (void)net_config_init_app(NULL, "Initializing network");
+  int i = 0;
+  while (i < 5)
+  {
+    wifi_set_led(i % 2 == 0);
+    sleep(1);
+  }
   return 0;
 }
