@@ -64,7 +64,6 @@ int main(void)
   int i = 0;
   while (i < 5)
   {
-    i++;
     wifi_set_led(i % 2 == 0);
     sleep(1);
   }
