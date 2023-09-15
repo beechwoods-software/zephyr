@@ -1121,31 +1121,6 @@ static int cmd_wifi_ap_disable(const struct shell *sh, size_t argc,
 	return 0;
 }
 
-#if defined(CONFIG_WIFI_RPIPICOWCYW43)
-static int cmd_wifi_led_on(const struct shell *sh, size_t argc, char *argv[])
-{
-	struct net_if *iface = net_if_get_first_wifi();
-	int ret = net_mgmt(NET_REQUEST_WIFI_SET_LED, iface, NULL, 1);
-	if (ret) {
-		shell_fprintf(sh, SHELL_WARNING, "set led on failed: %s\n", strerror(-ret));
-		return -ENOEXEC;
-	}
-	shell_fprintf(sh, SHELL_NORMAL, "led ON!!\n");
-	return 0;
-}
-
-static int cmd_wifi_led_off(const struct shell *sh, size_t argc, char *argv[])
-{
-	struct net_if *iface = net_if_get_first_wifi();
-	int ret = net_mgmt(NET_REQUEST_WIFI_SET_LED, iface, NULL, 0);
-	if (ret) {
-		shell_fprintf(sh, SHELL_WARNING, "set led off failed: %s\n", strerror(-ret));
-		return -ENOEXEC;
-	}
-	shell_fprintf(sh, SHELL_NORMAL, "led OFF!!\n");
-	return 0;
-}
-#endif
 
 static int cmd_wifi_reg_domain(const struct shell *sh, size_t argc,
 			       char *argv[])
@@ -1289,14 +1264,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(wifi_cmd_ap,
 	SHELL_SUBCMD_SET_END
 );
 
-#if defined(CONFIG_WIFI_RPIPICOWCYW43)
-SHELL_STATIC_SUBCMD_SET_CREATE(wifi_cmd_led,
-	SHELL_CMD(on, NULL, "set wifi led on", cmd_wifi_led_on),
-	SHELL_CMD(off, NULL, "set led off", cmd_wifi_led_off),
-	SHELL_SUBCMD_SET_END
-);
-#endif
-
 SHELL_STATIC_SUBCMD_SET_CREATE(wifi_twt_ops,
 	SHELL_CMD(quick_setup, NULL, " Start a TWT flow with defaults:\n"
 		"<twt_wake_interval: 1-262144us> <twt_interval: 1us-2^31us>\n",
@@ -1331,9 +1298,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(wifi_commands,
 		  cmd_wifi_connect),
 	SHELL_CMD(disconnect, NULL, "Disconnect from the Wi-Fi AP",
 		  cmd_wifi_disconnect),
-#if defined(CONFIG_WIFI_RPIPICOWCYW43)
-	SHELL_CMD(led, &wifi_cmd_led, "Set wifi LED on/off", NULL),
-#endif
 	SHELL_CMD(ps, NULL, "Configure Wi-F PS on/off, no arguments will dump config",
 		  cmd_wifi_ps),
 	SHELL_CMD_ARG(ps_mode,
