@@ -177,12 +177,6 @@ static void pico_w_cyw43_request_work(struct k_work *item)
 	case PICOWCYW43_REQ_ACTIVE_SCAN:
 	        pico_w_cyw43_scan(pico_w_cyw43, true);
 		break;
-  case PICOWCYW43_REQ_LED_ON:
-    cyw43_gpio_set(&cyw43_state, 0, true);
-    break;
-  case PICOWCYW43_REQ_LED_OFF:
-    cyw43_gpio_set(&cyw43_state, 0, false);
-    break;
 	case PICOWCYW43_REQ_NONE:	
 	default:
 		break;
@@ -378,22 +372,6 @@ static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
 
   pico_w_cyw43_unlock(pico_w_cyw43);
   return 0;    
-}
-
-static int pico_w_cyw43_mgmt_set_led(const struct device *dev, bool on)
-{
-  struct pico_w_cyw43_dev *pico_w_cyw43 = dev->data;
-  
-  LOG_DBG("Calling mgmt_set_led()");
-  pico_w_cyw43_lock(pico_w_cyw43);
-
-  pico_w_cyw43->req = on ? PICOWCYW43_REQ_LED_ON : PICOWCYW43_REQ_LED_OFF;
-
-  k_work_submit_to_queue(&pico_w_cyw43->work_q, &pico_w_cyw43->request_work);
-  
-  pico_w_cyw43_unlock(pico_w_cyw43);
-  
-  return 0;
 }
 
 static int pico_w_cyw43_mgmt_ap_disable(const struct device *dev)
@@ -653,7 +631,10 @@ static int pico_w_cyw43_init(const struct device *dev)
 					NULL, K_PRIO_COOP(EVENT_POLL_THREAD_PRIO), 0,
 					K_NO_WAIT);
     k_thread_name_set(thread_id, "pico_w_cyw43_event_poll_thread");
-#endif    
+#endif
+    
+    //wifi_set_led(true);
+    
     pico_w_cyw43_shell_register(pico_w_cyw43);
     
     return 0;
@@ -669,8 +650,7 @@ static const struct wifi_mgmt_ops pico_w_cyw43_mgmt_api = {
 	.iface_status		   = pico_w_cyw43_iface_status,
 #if defined(CONFIG_NET_STATISTICS_WIFI)
 	.get_stats	           = pico_w_cyw43_wifi_stats,
-#endif
-  .set_led = pico_w_cyw43_mgmt_set_led,
+#endif	
 };
 
 static const struct net_wifi_mgmt_offload pico_w_cyw43_callbacks = {
