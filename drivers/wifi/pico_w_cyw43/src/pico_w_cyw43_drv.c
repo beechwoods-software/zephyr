@@ -30,6 +30,9 @@ static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
 
 static struct pico_w_cyw43_dev pico_w_cyw43_0; /* static instance */
 
+struct k_sem number_of_events_to_process_sem;
+
+#define ISR_EVENT_PROCESSING
 #define POLLING_THREAD
 #ifdef POLLING_THREAD // Just leaving this here for now in case interrupts give us trouble and we need to poll instead.  
 #define EVENT_POLL_THREAD_STACK_SIZE 1024
@@ -39,18 +42,30 @@ K_KERNEL_STACK_MEMBER(pico_w_cyw43_event_poll_stack, EVENT_POLL_THREAD_STACK_SIZ
 struct k_thread event_thread;
 static void pico_w_cyw43_event_poll_thread(void *p1)
 {
-	LOG_DBG("Starting pico_w_cyw43_event_poll_thread\n");
+    struct pico_w_cyw43_dev *pico_w_cyw43 = &pico_w_cyw43_0;
+    int rv;
 
-	while (1) {
-	    if (cyw43_poll) {
-	      cyw43_poll();
-	    }
-	    else {
-	      LOG_DBG("Not calling cyw43_poll() from poll_thread, because it doesn't exist.");
-	    }
-	    k_sleep(K_MSEC(10));
+    LOG_DBG("Starting pico_w_cyw43_event_poll_thread\n");
+    
+    while (1) {
+      rv = k_sem_take(&number_of_events_to_process_sem, K_MSEC(10));
+      if (rv != 0) {
+	if (rv != -EAGAIN) {
+	  LOG_DBG("k_sem_take returned nonzero %d\n", rv);
 	}
-	
+      }
+      
+
+      pico_w_cyw43_lock(pico_w_cyw43);
+      if (cyw43_poll) {
+	cyw43_poll();
+      }
+      else {
+	LOG_DBG("Not calling cyw43_poll() from poll_thread, because it doesn't exist.");
+      }
+      pico_w_cyw43_unlock(pico_w_cyw43);
+   }
+    
 }
 #endif
 
@@ -112,24 +127,52 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev *pico_w_cyw43)
 {
 
 	LOG_DBG("Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
-	pico_w_cyw43_lock(pico_w_cyw43);
 
 	const uint8_t *ssid = (const uint8_t *)pico_w_cyw43->sta.ssid;
 	const uint8_t *pass = (const uint8_t *)pico_w_cyw43->sta.pass;
 
-	//TODO: might have to implement retry and timeout
-	//if (cyw43_arch_wifi_connect_timeout_ms(pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-	if (cyw43_wifi_join(&cyw43_state, strlen(ssid), (const uint8_t *)ssid, pass ? strlen(pass) : 0, (const uint8_t *)pass, CYW43_AUTH_WPA2_AES_PSK, NULL, CYW43_CHANNEL_NONE)) {
-	  LOG_ERR("failed to connect.\n");
-	  return 1;
-	} else {
-	  LOG_DBG("Connected.\n");
+	int rv;
+
+	// This looks unbelievably goofy, but the comments in cyw43.h say:
+	//   "After success is returned, periodically call \ref cyw43_wifi_link_status or cyw43_tcpip_link_status,
+        //    to query the status of the link. It can take a many seconds to connect to fully join a network."
+	for (int i=0; i<5; i++) {
+	  rv = 0;
+	  if (cyw43_wifi_join(&cyw43_state, strlen(ssid), (const uint8_t *)ssid, pass ? strlen(pass) : 0, (const uint8_t *)pass, CYW43_AUTH_WPA2_AES_PSK, NULL, CYW43_CHANNEL_NONE)) {
+	    LOG_ERR("failed to connect.\n");
+	    continue;
+	  } 
+
+	  // In my experience, full connection was always achieved before 4 seconds (j==8), but
+	  // increasing it may ben necessary on some wifi networks. Unfortunately increasing it
+	  // also raises the /minimum/ connection time.
+	  for (int j=0; j<8; j++) {
+	    int link_status=cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+	    //printf("**** link_status=%d ****\n", link_status);
+	    if (link_status != CYW43_LINK_JOIN) {
+	      rv = 1;
+	      break;
+	    }
+	    k_sleep(K_MSEC(500));
+	  }
+	  if (rv == 0) {
+	    break;
+	  }
 	}
 
-	net_if_carrier_on(pico_w_cyw43->iface);
+	if (rv == 1) {
+	  LOG_DBG("pico_w_cyw43_connect failed to connect.\n");
+	}
+	else {
+	  pico_w_cyw43_lock(pico_w_cyw43);
+	  net_if_carrier_on(pico_w_cyw43->iface);
+	  pico_w_cyw43_unlock(pico_w_cyw43);
+	  
+	  LOG_DBG("pico_w_cyw43_connect connected.\n");
+	}
+	
 	LOG_DBG("Done Connecting to %s (pass=%s)\n", pico_w_cyw43->sta.ssid, pico_w_cyw43->sta.pass);
-	pico_w_cyw43_unlock(pico_w_cyw43);
-	return 0;
+	return rv;
 }
 
 static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev *pico_w_cyw43)
@@ -513,7 +556,7 @@ void cyw43_delay_us(uint32_t us) {
   k_busy_wait(us);
 }
 
-//#define ISR_EVENT_PROCESSING
+
 #ifdef ISR_EVENT_PROCESSING
 static void cyw43_set_irq_enabled(bool enabled)
 {
@@ -538,22 +581,13 @@ static void pico_w_cyw43_isr(const struct device *port,
 			    struct gpio_callback *cb,
 			    gpio_port_pins_t pins)
 {
-  //LOG_DBG("Calling pico_w_cyw43_isr()");
 
+  //LOG_DBG("Calling pico_w_cyw43_isr()");
   // TODO: Should really find the Zephyr equivalent of gpio_get_irq_event_mask
   uint32_t events = gpio_get_irq_event_mask(PICOWCYW43_GPIO_INTERRUPT_PIN);
-  if (events & GPIO_IRQ_LEVEL_HIGH) { 
-    //cyw43_set_irq_enabled(false);
-    cyw43_set_irq_enabled(true);
-  }
-  
-  //Schedule the rest of the work to be done
-  if (cyw43_poll) {
-    //LOG_DBG("Calling cyw43_poll() from cyw43_isr");
-    cyw43_poll();
-  }
-  else {
-    //LOG_DBG("Not calling cyw43_poll() from cyw43_isr, because it doesn't exist.");
+  if (events & GPIO_IRQ_LEVEL_HIGH) {
+    k_sem_give(&number_of_events_to_process_sem);
+    cyw43_set_irq_enabled(false);
   }
 }
 
@@ -611,6 +645,8 @@ static int pico_w_cyw43_init(const struct device *dev)
 
 #ifdef ISR_EVENT_PROCESSING
 
+    k_sem_init(&number_of_events_to_process_sem, 0, 10);
+    
     pico_w_cyw43_register_cb();
 
     cyw43_set_irq_enabled(true);
