@@ -1,0 +1,6 @@
+description: Infineon cyw43 LED driver for pico_w
+
+compatible: "cyw43,led"
+
+include: i2c-device.yaml
+

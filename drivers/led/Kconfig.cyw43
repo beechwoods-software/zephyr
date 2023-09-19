@@ -1,0 +1,8 @@
+config LED_CYW43
+	bool "cyw43 LED driver"
+	default y
+    depends on LED
+#    depends on DT_HAS_CYW43_LED_ENABLED
+    select I2C
+	help
+	  Enable the cyw43 LED driver.
