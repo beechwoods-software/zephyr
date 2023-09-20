@@ -1,4 +1,4 @@
-#define DT_DRV_COMPAT cyw43_led
+#define DT_DRV_COMPAT infineon_cyw43_led
 
 #include <errno.h>
 
@@ -47,13 +47,13 @@ static const struct led_driver_api cyw43_led_api = {
     .off = cyw43_led_off,
 };
 
-DEVICE_DT_INST_DEFINE(0, &cyw43_led_init, NULL, &cyw43_led_data,
-              &cyw43_led_config, POST_KERNEL, CONFIG_LED_INIT_PRIORITY,
+DEVICE_DT_INST_DEFINE(0, cyw43_led_init, NULL, &cyw43_led_data,
+              NULL, POST_KERNEL, CONFIG_LED_INIT_PRIORITY,
               &cyw43_led_api);
 
 /*
 #define LED_CYW43_DEFINE(n) \
-  DEVICE_DT_INST_DEFINE(n, &cyw43_led_init, NULL, NULL, NULL, \
+  DEVICE_DT_INST_DEFINE(n, cyw43_led_init, NULL, NULL, NULL, \
 			            POST_KERNEL, CONFIG_LED_INIT_PRIORITY, &cyw43_led_api);
 
 DT_INST_FOREACH_STATUS_OKAY(LED_CYW43_DEFINE)

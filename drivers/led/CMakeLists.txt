@@ -4,7 +4,13 @@ zephyr_syscall_header(${ZEPHYR_BASE}/include/zephyr/drivers/led.h)
 
 zephyr_library()
 
-zephyr_library_sources_ifdef(CONFIG_LED_CYW43 led_cyw43.c)
+if(CONFIG_LED_CYW43)
+  zephyr_library_include_directories(../wifi/pico_w_cyw43/src/
+                                     ../wifi/pico_w_cyw43/src/georgerobotics/)
+  zephyr_library_sources(led_cyw43.c
+                         ../wifi/pico_w_cyw43/src/georgerobotics/cyw43_ll.c
+                         ../wifi/pico_w_cyw43/src/georgerobotics/cyw43_ctrl.c)
+endif()
 zephyr_library_sources_ifdef(CONFIG_HT16K33 ht16k33.c)
 zephyr_library_sources_ifdef(CONFIG_IS31FL3216A is31fl3216a.c)
 zephyr_library_sources_ifdef(CONFIG_LED_GPIO led_gpio.c)

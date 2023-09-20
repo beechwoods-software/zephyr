@@ -54,8 +54,29 @@
 		      label = "LED";
 		};
 	};
+        pico_w_cyw43@1 {
+		compatible = "infineon,cyw43_led";
+		reg = <0>;
+		spi-max-frequency = <4000000>; /* Setting at 4Mhz because that's what picowi had,
+				    	       	  but may decrease if there are probems */
+		cyw43_ledz: cyw43_ledz {		/* Pico W LED is on CYW43439 GPIO 0 */
+		      compatible = "gpioled";
+		      gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+		      label = "LED";
+		};
+	};
 };
 
+
+/ {
+    pico_w_led {		/* Pico W LED is on CYW43439 GPIO 0 */
+		    compatible = "gpioled";
+            led: led_0 {
+		      gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+		      label = "LED";
+            };
+		};
+};
 
 / {
 	cyw43_interrupts {

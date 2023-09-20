@@ -38,6 +38,10 @@ config BUILD_CYW43_WITH_ZEPHYR_PIO_SPI
         bool "Use Zephyr's PIO SPI bus"
 	default n
 
+config LED_INIT_PRIORITY
+    int "Wifi led driver init priority"
+    default 80
+
 #
 #choice WIFI_RPIPICOWCYW43_BUS
 #	bool "Select BUS interface"
