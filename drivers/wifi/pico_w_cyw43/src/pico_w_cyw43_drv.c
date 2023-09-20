@@ -76,18 +76,32 @@ uint16_t pbuf_copy_partial(const struct pbuf *p, void *dataptr, uint16_t len, ui
 }
 
 static int process_cyw43_scan_result(void *env, const cyw43_ev_scan_result_t *result) {
-    //struct pico_w_cyw43_dev *pico_w_cyw43 = &pico_w_cyw43_0;
-    
-    if (result) {
-        printf("ssid: %-32s rssi: %4d chan: %3d mac: %02x:%02x:%02x:%02x:%02x:%02x sec: %u\n",
-            result->ssid, result->rssi, result->channel,
-            result->bssid[0], result->bssid[1], result->bssid[2], result->bssid[3], result->bssid[4], result->bssid[5],
-            result->auth_mode);
-    }
-    //TODO: return this info to Zephyr
-    //LOG_DBG("calling scan_cb with interface=%s\n", pico_w_cyw43->iface->if_dev->dev->name);
-    //pico_w_cyw43->scan_cb(pico_w_cyw43->iface, 0, NULL);
+    struct pico_w_cyw43_dev *pico_w_cyw43 = &pico_w_cyw43_0;
 
+    struct wifi_scan_result zephyr_scan_result;
+    memset(&zephyr_scan_result, 0, sizeof(struct wifi_scan_result));
+
+    if (result) {
+
+        LOG_DBG("Setting up zephyr_scan_result\n");
+	zephyr_scan_result.ssid_length = strnlen(result->ssid, WIFI_SSID_MAX_LEN);
+	strncpy(zephyr_scan_result.ssid, result->ssid, zephyr_scan_result.ssid_length);
+	zephyr_scan_result.channel = result->channel;
+	zephyr_scan_result.rssi = result->rssi;
+	zephyr_scan_result.mac_length = WIFI_MAC_ADDR_LEN;
+	memcpy(zephyr_scan_result.mac, result->bssid, WIFI_MAC_ADDR_LEN);
+	zephyr_scan_result.security = (result->auth_mode == CYW43_AUTH_OPEN ? WIFI_SECURITY_TYPE_NONE :
+				       (result->auth_mode == CYW43_AUTH_WPA_TKIP_PSK ? WIFI_SECURITY_TYPE_WPA_PSK :
+					(result->auth_mode == CYW43_AUTH_WPA2_AES_PSK ? WIFI_SECURITY_TYPE_PSK :
+					 (result->auth_mode == CYW43_AUTH_WPA2_MIXED_PSK ? WIFI_SECURITY_TYPE_PSK :
+					  WIFI_SECURITY_TYPE_UNKNOWN))));
+	LOG_DBG("Finished setting up zephyr_scan_result\n");
+		
+	pico_w_cyw43_lock(pico_w_cyw43);
+	LOG_DBG("calling scan_cb with interface=%s\n", pico_w_cyw43->iface->if_dev->dev->name);
+	pico_w_cyw43->scan_cb(pico_w_cyw43->iface, 0, &zephyr_scan_result);
+	pico_w_cyw43_unlock(pico_w_cyw43);
+    }
     return 0;
 }
 
@@ -95,30 +109,39 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev *pico_w_cyw43, bool active
 {	
 
   	LOG_DBG("Scannings (%s).\n", active ? "active" : "passive");
-        pico_w_cyw43_lock(pico_w_cyw43);
+	
+	int err;
+	static cyw43_wifi_scan_options_t scan_options;
 
 
 	if (!cyw43_wifi_scan_active(&cyw43_state)) {
-	  cyw43_wifi_scan_options_t scan_options = {0};
+	  memset(&scan_options, 0, sizeof(cyw43_wifi_scan_options_t));
 	  scan_options.scan_type = (active ? 0 : 1);
-	  
-	  int err = cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, process_cyw43_scan_result);
+	  pico_w_cyw43_lock(pico_w_cyw43);
+	  err = cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, process_cyw43_scan_result);
+	  pico_w_cyw43_unlock(pico_w_cyw43);
 	  
 	  if (err == 0) {
-	    LOG_INF("\nPerforming wifi scan\n");
+	    LOG_DBG("Performing wifi scan");
 	  } else {
-	    LOG_ERR("Failed to start scan: %d\n", err);
+	    LOG_ERR("Failed to start scan: %d", err);
 	  }
 	}
 	else {
-	  LOG_INF("\nWifi_scan already active.\n");
+	  LOG_DBG("Wifi_scan already active.");
+	}
+	
+	for (int i=0; i<50; i++) {
+	  if (!cyw43_wifi_scan_active(&cyw43_state)) {
+	    break;
+	  }
+	  k_sleep(K_MSEC(50));
 	}
 
-	/* WiFi scan is done. */
+	LOG_DBG("scan is finished.");
 	
-	LOG_DBG("calling scan_cb with interface=%s\n", pico_w_cyw43->iface->if_dev->dev->name);
+	pico_w_cyw43_lock(pico_w_cyw43);
 	pico_w_cyw43->scan_cb(pico_w_cyw43->iface, 0, NULL);
-
 	pico_w_cyw43_unlock(pico_w_cyw43);
 }
 
@@ -463,9 +486,6 @@ void cyw43_cb_process_ethernet(void *cb_data, int itf, size_t len, const uint8_t
 	pico_w_cyw43->stats.pkts.rx++;
 #endif
    
-  // TODO: Add statistic counters
-  
-  // TODO: Add statistic counters
   goto pkt_processing_succeeded;
 
  pkt_processing_failed:
