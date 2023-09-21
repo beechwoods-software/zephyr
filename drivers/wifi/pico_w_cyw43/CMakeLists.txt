@@ -5,6 +5,7 @@ if(CONFIG_WIFI_RPIPICOWCYW43)
     zephyr_library_include_directories(src/ src/georgerobotics/)
     
     zephyr_library_sources(
+      src/pico_w_cyw43_led_drv.c
       src/pico_w_cyw43_drv.c
       src/pico_w_cyw43_shell.c
       src/georgerobotics/cyw43_ll.c
@@ -15,6 +16,7 @@ if(CONFIG_WIFI_RPIPICOWCYW43)
     zephyr_library_include_directories(src/ src/georgerobotics/)
     
     zephyr_library_sources(
+      src/pico_w_cyw43_led_drv.c
       src/pico_w_cyw43_drv.c
       src/pico_w_cyw43_shell.c
       src/georgerobotics/cyw43_ll.c
@@ -27,6 +29,7 @@ if(CONFIG_WIFI_RPIPICOWCYW43)
     zephyr_library_include_directories(src/ src/rpi2_common/ src/georgerobotics/)
     
     zephyr_library_sources(
+      src/pico_w_cyw43_led_drv.c
       src/pico_w_cyw43_drv.c
       src/pico_w_cyw43_shell.c
       src/georgerobotics/cyw43_ll.c
