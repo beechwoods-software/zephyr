@@ -56,10 +56,10 @@ struct spi_pico_pio_data {
 #define SPI_MODE_0_0_CYCLES 4
 
 RPI_PICO_PIO_DEFINE_PROGRAM(spi_mode_0_0, SPI_MODE_0_0_WRAP_TARGET, SPI_MODE_0_0_WRAP,
-			    /*     .wrap_target */
-			    0x6101, /*  0: out    pins, 1         side 0 [1] */
-			    0x5101, /*  1: in     pins, 1         side 1 [1] */
-				/*     .wrap */
+		/*     .wrap_target */
+	0x6101, /*  0: out    pins, 1         side 0 [1] */
+	0x5101, /*  1: in     pins, 1         side 1 [1] */
+		/*     .wrap */
 );
 
 /* ------------ */
@@ -71,11 +71,11 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_mode_0_0, SPI_MODE_0_0_WRAP_TARGET, SPI_MODE_0_0
 #define SPI_MODE_1_1_CYCLES 4
 
 RPI_PICO_PIO_DEFINE_PROGRAM(spi_mode_1_1, SPI_MODE_1_1_WRAP_TARGET, SPI_MODE_1_1_WRAP,
-			    /*     .wrap_target */
-			    0x7021, /*  0: out    x, 1            side 1 */
-			    0xa101, /*  1: mov    pins, x         side 0 [1] */
-			    0x5001, /*  2: in     pins, 1         side 1 */
-				/*     .wrap */
+		/*     .wrap_target */
+	0x7021, /*  0: out    x, 1            side 1 */
+	0xa101, /*  1: mov    pins, x         side 0 [1] */
+	0x5001, /*  2: in     pins, 1         side 1 */
+		/*     .wrap */
 );
 
 /* ------------------- */
@@ -84,78 +84,78 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_mode_1_1, SPI_MODE_1_1_WRAP_TARGET, SPI_MODE_1_1
 
 #define SPI_SIO_MODE_0_0_TX_WRAP_TARGET 0
 #define SPI_SIO_MODE_0_0_TX_WRAP 2
-#define SPI_SIO_MODE_0_0_TX_CYCLES 4
+#define SPI_SIO_MODE_0_0_TX_CYCLES 2
 
 RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_mode_0_0_tx, SPI_SIO_MODE_0_0_TX_WRAP_TARGET,
 	SPI_SIO_MODE_0_0_TX_WRAP,
-            /*     .wrap_target */
-    0x80a0, /*  0: pull   block           side 0 */
-    0x6101, /*  1: out    pins, 1         side 0 [1] */
-    0x11e1, /*  2: jmp    !osre, 1        side 1 [1] */
-            /*     .wrap */
+		/*     .wrap_target */
+	0x80a0, /*  0: pull   block           side 0 */
+	0x6001, /*  1: out    pins, 1         side 0 */
+	0x10e1, /*  2: jmp    !osre, 1        side 1 */
+		/*     .wrap */
 );
 
-/* ---------------- */
-/* spi_sio_8_bit_rx */
-/* ---------------- */
+/* ------------------------- */
+/* spi_sio_mode_0_0_8_bit_rx */
+/* ------------------------- */
 
-#define SPI_SIO_8_BIT_RX_WRAP_TARGET 0
-#define SPI_SIO_8_BIT_RX_WRAP 7
+#define SPI_SIO_MODE_0_0_8_BIT_RX_WRAP_TARGET 0
+#define SPI_SIO_MODE_0_0_8_BIT_RX_WRAP 6
+#define SPI_SIO_MODE_0_0_8_BIT_RX_CYCLES 2
 
-RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_8_bit_rx, SPI_SIO_8_BIT_RX_WRAP_TARGET,
-	SPI_SIO_8_BIT_RX_WRAP,
-            /*     .wrap_target */
-    0x80a0, /*  0: pull   block           side 0 */
-    0x6020, /*  1: out    x, 32           side 0 */
-    0xe047, /*  2: set    y, 7            side 0 */
-    0xb142, /*  3: nop                    side 1 [1] */
-    0x4001, /*  4: in     pins, 1         side 0 */
-    0x0083, /*  5: jmp    y--, 3          side 0 */
-    0x8020, /*  6: push   block           side 0 */
-    0x0042, /*  7: jmp    x--, 2          side 0 */
-            /*     .wrap */
+RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_mode_0_0_8_bit_rx, SPI_SIO_MODE_0_0_8_BIT_RX_WRAP_TARGET,
+	SPI_SIO_MODE_0_0_8_BIT_RX_WRAP,
+		/*     .wrap_target */
+	0x80a0, /*  0: pull   block           side 0 */
+	0x6020, /*  1: out    x, 32           side 0 */
+	0xe047, /*  2: set    y, 7            side 0 */
+	0x5001, /*  3: in     pins, 1         side 1 */
+	0x0083, /*  4: jmp    y--, 3          side 0 */
+	0x8020, /*  5: push   block           side 0 */
+	0x0042, /*  6: jmp    x--, 2          side 0 */
+		/*     .wrap */
 );
 
-/* ----------------- */
-/* spi_sio_16_bit_rx */
-/* ----------------- */
+/* -------------------------- */
+/* spi_sio_mode_0_0_16_bit_rx */
+/* -------------------------- */
 
-#define SPI_SIO_16_BIT_RX_WRAP_TARGET 0
-#define SPI_SIO_16_BIT_RX_WRAP 7
+#define SPI_SIO_MODE_0_0_16_BIT_RX_WRAP_TARGET 0
+#define SPI_SIO_MODE_0_0_16_BIT_RX_WRAP 6
+#define SPI_SIO_MODE_0_0_16_BIT_RX_CYCLES 2
 
-RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_16_bit_rx, SPI_SIO_16_BIT_RX_WRAP_TARGET,
-	SPI_SIO_16_BIT_RX_WRAP,
-            /*     .wrap_target */
-    0x80a0, /*  0: pull   block           side 0 */
-    0x6020, /*  1: out    x, 32           side 0 */
-    0xe04f, /*  2: set    y, 15           side 0 */
-    0xb142, /*  3: nop                    side 1 [1] */
-    0x4001, /*  4: in     pins, 1         side 0 */
-    0x0083, /*  5: jmp    y--, 3          side 0 */
-    0x8020, /*  6: push   block           side 0 */
-    0x0042, /*  7: jmp    x--, 2          side 0 */
-            /*     .wrap */
+RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_mode_0_0_16_bit_rx, SPI_SIO_MODE_0_0_16_BIT_RX_WRAP_TARGET,
+	SPI_SIO_MODE_0_0_16_BIT_RX_WRAP,
+		/*     .wrap_target */
+	0x80a0, /*  0: pull   block           side 0 */
+	0x6020, /*  1: out    x, 32           side 0 */
+	0xe04f, /*  2: set    y, 15           side 0 */
+	0x5001, /*  3: in     pins, 1         side 1 */
+	0x0083, /*  4: jmp    y--, 3          side 0 */
+	0x8020, /*  5: push   block           side 0 */
+	0x0042, /*  6: jmp    x--, 2          side 0 */
+		/*     .wrap */
 );
 
-/* ----------------- */
-/* spi_sio_32_bit_rx */
-/* ----------------- */
+/* -------------------------- */
+/* spi_sio_mode_0_0_32_bit_rx */
+/* -------------------------- */
 
-#define SPI_SIO_32_BIT_RX_WRAP_TARGET 0
-#define SPI_SIO_32_BIT_RX_WRAP 7
+#define SPI_SIO_MODE_0_0_32_BIT_RX_WRAP_TARGET 0
+#define SPI_SIO_MODE_0_0_32_BIT_RX_WRAP 6
+#define SPI_SIO_MODE_0_0_32_BIT_RX_CYCLES 2
 
-RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_32_bit_rx, SPI_SIO_32_BIT_RX_WRAP_TARGET,
-	SPI_SIO_32_BIT_RX_WRAP,
-            /*     .wrap_target */
-    0x80a0, /*  0: pull   block           side 0 */
-    0x6020, /*  1: out    x, 32           side 0 */
-    0xe05f, /*  2: set    y, 31           side 0 */
-    0xb142, /*  3: nop                    side 1 [1] */
-    0x4001, /*  4: in     pins, 1         side 0 */
-    0x0083, /*  5: jmp    y--, 3          side 0 */
-    0x8020, /*  6: push   block           side 0 */
-    0x0042, /*  7: jmp    x--, 2          side 0 */
-            /*     .wrap */
+RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_mode_0_0_32_bit_rx, SPI_SIO_MODE_0_0_32_BIT_RX_WRAP_TARGET,
+	SPI_SIO_MODE_0_0_32_BIT_RX_WRAP,
+		/*     .wrap_target */
+	0x80a0, /*  0: pull   block           side 0 */
+	0x6020, /*  1: out    x, 32           side 0 */
+	0xe05f, /*  2: set    y, 31           side 0 */
+	0x5001, /*  3: in     pins, 1         side 1 */
+	0x0083, /*  4: jmp    y--, 3          side 0 */
+	0x8020, /*  5: push   block           side 0 */
+	0x0042, /*  6: jmp    x--, 2          side 0 */
+		/*     .wrap */
 );
 
 static float spi_pico_pio_clock_divisor(const struct spi_pico_pio_config *dev_cfg,
@@ -336,30 +336,30 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 
 			case 4:
 				data->pio_rx_offset = pio_add_program(data->pio,
-					RPI_PICO_PIO_GET_PROGRAM(spi_sio_32_bit_rx));
+					RPI_PICO_PIO_GET_PROGRAM(spi_sio_mode_0_0_32_bit_rx));
 				data->pio_rx_wrap_target = data->pio_rx_offset
-					+ RPI_PICO_PIO_GET_WRAP_TARGET(spi_sio_32_bit_rx);
+					+ RPI_PICO_PIO_GET_WRAP_TARGET(spi_sio_mode_0_0_32_bit_rx);
 				data->pio_rx_wrap = data->pio_rx_offset
-					+ RPI_PICO_PIO_GET_WRAP(spi_sio_32_bit_rx);
+					+ RPI_PICO_PIO_GET_WRAP(spi_sio_mode_0_0_32_bit_rx);
 				break;
 
 			case 2:
 				data->pio_rx_offset = pio_add_program(data->pio,
-					RPI_PICO_PIO_GET_PROGRAM(spi_sio_16_bit_rx));
+					RPI_PICO_PIO_GET_PROGRAM(spi_sio_mode_0_0_16_bit_rx));
 				data->pio_rx_wrap_target = data->pio_rx_offset
-					+ RPI_PICO_PIO_GET_WRAP_TARGET(spi_sio_16_bit_rx);
+					+ RPI_PICO_PIO_GET_WRAP_TARGET(spi_sio_mode_0_0_16_bit_rx);
 				data->pio_rx_wrap = data->pio_rx_offset
-					+ RPI_PICO_PIO_GET_WRAP(spi_sio_16_bit_rx);
+					+ RPI_PICO_PIO_GET_WRAP(spi_sio_mode_0_0_16_bit_rx);
 				break;
 
 			case 1:
 			default:
 				data->pio_rx_offset = pio_add_program(data->pio,
-					RPI_PICO_PIO_GET_PROGRAM(spi_sio_8_bit_rx));
+					RPI_PICO_PIO_GET_PROGRAM(spi_sio_mode_0_0_8_bit_rx));
 				data->pio_rx_wrap_target = data->pio_rx_offset
-					+ RPI_PICO_PIO_GET_WRAP_TARGET(spi_sio_8_bit_rx);
+					+ RPI_PICO_PIO_GET_WRAP_TARGET(spi_sio_mode_0_0_8_bit_rx);
 				data->pio_rx_wrap = data->pio_rx_offset
-					+ RPI_PICO_PIO_GET_WRAP(spi_sio_8_bit_rx);
+					+ RPI_PICO_PIO_GET_WRAP(spi_sio_mode_0_0_8_bit_rx);
 				break;
 		}
 		sm_config = pio_get_default_sm_config();
@@ -741,6 +741,10 @@ int spi_pico_pio_init(const struct device *dev)
 	const struct spi_pico_pio_config *dev_cfg = dev->config;
 	struct spi_pico_pio_data *data = dev->data;
 	int rc;
+
+	// DEBUG
+	printk("spi_pico_pio_init() called\n");
+	// DEBUG END
 
 	rc = pinctrl_apply_state(dev_cfg->pin_cfg, PINCTRL_STATE_DEFAULT);
 	if (rc) {

@@ -12,6 +12,6 @@ properties:
     type: int
     required: true
 
-  wl-ons:
+  wl-on-gpios:
     type: phandle-array
 
