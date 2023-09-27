@@ -1,0 +1,37 @@
+&spi0 {
+	status = "disabled";
+};
+
+&pinctrl {
+	pio0_spi0_default: pio0_spi0_default {
+		/* gpio 13 is used for chip select, not assigned to the PIO */
+		group1 {
+			pinmux = <PIO0_P14>, <PIO0_P15>;
+		};
+	};
+};
+
+&pio0 {
+ 	status = "okay";
+
+	pio0_spi0: pio0_spi0 {
+		pinctrl-0 = <&pio0_spi0_default>;
+		pinctrl-names = "default";
+
+		compatible = "raspberrypi,pico-spi-pio";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = < &system_clk >;
+		cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+		clk-gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+		sio-gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+		cyw43: cyw43@0 {
+			compatible = "infineon,cyw43";
+			reg = < 0x0 >;
+			spi-max-frequency = < 1000000 >;
+			wl-on-gpios = < &gpio0 16 GPIO_ACTIVE_HIGH >;
+		};
+	};
+};
+
