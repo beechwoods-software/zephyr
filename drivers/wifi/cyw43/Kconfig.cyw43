@@ -20,20 +20,18 @@ menuconfig WIFI_CYW43
 	#select PICOSDK_USE_GPIO	
 	#select PICOSDK_USE_PWM
 	
-#if WIFI_CYW43
+if WIFI_CYW43
+
 config WIFI_CYW43_SHELL
 	bool "CYW43 shell"
 	depends on SHELL
 	help
 	  Enable CYW43 shell
 
-#
-#config WIFI_CYW43_THREAD_PRIO
-#	int "CYW43 threads priority"
-#	default 2
-#	help
-#	  This option sets the priority of the CYW43 threads.
-#	  Do not touch it unless you know what you are doing.
-#
+config WIFI_CYW43_USE_CYW4343W
+	bool "Use Infineon CYW4343W chip"
+	help
+		Use firmware for the CYW4343W chip in place of
+		the CYW43439 on the Raspberry Pi Pico W.
 
-#endif
+endif
