@@ -23,8 +23,6 @@
 #include "picowi/picowi_pico.h"
 
 #define WHD_BUS_SPI_BACKPLANE_READ_PADD_SIZE        (4)
-//#define DT_DRV_COMPAT infineon_cyw43
-
 
 #if CYW43_SPI_PIO
 #define WL_REG_ON 23
@@ -55,8 +53,6 @@ bool enable_spi_packet_dumping=false; // set to true to dump
 bool do_ridiculous_byte_reordering=true;
 
 #undef SWAP32
-//#define SWAP32(A) (A)
-//#define SWAP32(A) ((((A) & 0xff000000U) >> 8) | (((A) & 0xff0000U) << 8) | (((A) & 0xff00U) >> 8) | (((A) & 0xffU) << 8))
 __force_inline static uint32_t __swap16x2(uint32_t a) {
     __asm ("rev16 %0, %0" : "+l" (a) : : );
     return a;
@@ -145,11 +141,8 @@ void cyw43_spi_deinit(cyw43_int_t *self) {
 int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, uint8_t *rx,
                        size_t rx_length) {
 
-  bool tx_only = false;
+    bool tx_only = false;
   
-  /* CYW43_VDEBUG("Calling cyw43_spi_transfer(self=0x%lx, tx=0x%lx, tx_length=%d, rx=0x%lx, rx_length=%d)\n",
-         (unsigned long)self, (unsigned long)tx, (unsigned int)tx_length,
-	 (unsigned long)rx, (unsigned int)rx_length); */
   
     if ((tx == NULL) && (rx == NULL)) {
         return CYW43_FAIL_FAST_CHECK(-CYW43_EINVAL);
@@ -175,7 +168,7 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
     io_out(CS_PIN, 0);
     
     pio_spi_write((unsigned char *)tx, (int)(tx_length * 8));
-    //pio_spi_write((unsigned char *)tx, 32);
+
     DUMP_SPI_TRANSACTIONS(
       printf("TXed:");
       dump_bytes(tx, tx_length);
@@ -194,7 +187,6 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
 	
 	if (i > rx_length) {
 	  int bits_remaining = i - rx_length;
-	  //printf("i=%d, bits_remaining=%d\n", i, bits_remaining);
 	  pio_spi_read((unsigned char *)(rx + i - 8), bits_remaining *8 );
 	}	
       }
@@ -208,7 +200,6 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
 			    printf("\n");)	
     }
     
-    //gpio_put(CS_PIN, true);
     io_out(SD_CS_PIN, 1);
     
     return 0;
@@ -223,39 +214,16 @@ void cyw43_spi_gpio_setup(void) {
     gpio_init(WL_REG_ON);
     gpio_set_dir(WL_REG_ON, GPIO_OUT);
     gpio_pull_up(WL_REG_ON);
-    //gpio_put(WL_REG_ON, false);
 
     // Setup CS (25)
     gpio_init(CS_PIN);
     gpio_set_dir(CS_PIN, GPIO_OUT);
-    //gpio_pull_up(CS_PIN);
     gpio_put(CS_PIN, true);
-
-#if 0    
-    // Setup CLOCK (29)
-    gpio_init(CLOCK_PIN);
-    gpio_set_dir(CLOCK_PIN, GPIO_OUT);
-    //gpio_pull_up(CLOCK_PIN);
-    gpio_put(CLOCK_PIN, false);
-#endif
     
     // Setup DO, DI and IRQ (24)
     gpio_init(DATA_OUT_PIN);
     gpio_set_dir(DATA_OUT_PIN, GPIO_OUT);
-    //gpio_pull_up(DATA_OUT_PIN);
     gpio_put(DATA_OUT_PIN, false);
-
-#if 0    
-    k_sleep(K_MSEC(100));
-    
-    gpio_put(WL_REG_ON, false);
-
-    k_sleep(K_MSEC(50));
-
-    gpio_set_dir(DATA_OUT_PIN, GPIO_IN);
-    gpio_set_dir(IRQ_PIN, GPIO_IN);
-#endif
-
 }
 
 // Reset wifi chip
@@ -269,7 +237,6 @@ void cyw43_spi_reset(void) {
  
     // Setup IRQ (24) - also used for DO, DI
     gpio_init(IRQ_PIN);
-    //gpio_set_dir(DATA_OUT_PIN, GPIO_IN);
     gpio_set_dir(IRQ_PIN, GPIO_IN);
 }
 
@@ -398,6 +365,11 @@ int cyw43_write_reg_u8(cyw43_int_t *self, uint32_t fn, uint32_t reg, uint32_t va
 #endif
 
 int cyw43_read_bytes(cyw43_int_t *self, uint32_t fn, uint32_t addr, size_t len, uint8_t *buf) {
+
+    /* this flag is initialized to true, but should remain false starting with the first call 
+       to this function. */
+    do_ridiculous_byte_reordering=false;
+    
     assert(fn != BACKPLANE_FUNCTION || (len <= CYW43_BUS_MAX_BLOCK_SIZE));
     const uint32_t padding = (fn == BACKPLANE_FUNCTION) ? CYW43_BACKPLANE_READ_PAD_LEN_BYTES : 0; // Add response delay
     size_t aligned_len = (len + 3) & ~3;

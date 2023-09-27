@@ -14,7 +14,7 @@
 #else // 0
 
 #undef LOG_MODULE_REGISTER
-#define LOG_MODULE_REGISTER(x)
+#define LOG_MODULE_REGISTER(x, y)
 #undef LOG_DBG
 #define LOG_DBG(x, ...)
 #undef LOG_WRN

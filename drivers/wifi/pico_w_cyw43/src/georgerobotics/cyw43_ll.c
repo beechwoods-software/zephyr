@@ -1133,9 +1133,6 @@ static int cyw43_ll_sdpcm_poll_device(cyw43_int_t *self, size_t *len, uint8_t **
         self->had_successful_packet = false;
         return -1;
     }
-#if defined(CONFIG_USE_PICOWI_PIOSPI)
-    do_ridiculous_byte_reordering=false;
-#endif
     int ret = cyw43_read_bytes(self, WLAN_FUNCTION, 0, bytes_pending, self->spid_buf);
     if (ret != 0) {
         return ret;
@@ -1476,7 +1473,6 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         cyw43_spi_reset();
         CYW43_EVENT_POLL_HOOK;
 
-	CYW43_DEBUG("Reading test pattern\n");
         // Check test register can be read
         for (int i = 0; i < 10; ++i) {
             uint32_t reg = read_reg_u32_swap(self, BUS_FUNCTION, SPI_READ_TEST_REGISTER);
@@ -1489,11 +1485,9 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         break; // failed
     chip_up:
         // Switch to 32bit mode
-	CYW43_VDEBUG("Switching to 32bit mode\n");
         CYW43_VDEBUG("setting SPI_BUS_CONTROL 0x%lx\n", (long unsigned int) val);
 
         if (write_reg_u32_swap(self, BUS_FUNCTION, SPI_BUS_CONTROL, val) != 0) {
-	    CYW43_VDEBUG("Break #1\n");
             break;
         }
 
@@ -1501,14 +1495,12 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         CYW43_VDEBUG("read SPI_BUS_CONTROL 0x%lx\n", (long unsigned int) val);
 
         if (cyw43_write_reg_u8(self, BUS_FUNCTION, SPI_RESP_DELAY_F1, CYW43_BACKPLANE_READ_PAD_LEN_BYTES) != 0) {
-	    CYW43_VDEBUG("Break #2\n");
             break;
         }
 
         // Make sure error interrupt bits are clear
         if (cyw43_write_reg_u8(self, BUS_FUNCTION, SPI_INTERRUPT_REGISTER,
             DATA_UNAVAILABLE | COMMAND_ERROR | DATA_ERROR | F1_OVERFLOW) != 0) {
-	    CYW43_VDEBUG("Break #3\n");
             break;
         }
 
@@ -1519,7 +1511,6 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         cyw43_interrupts |= F1_INTR;
         #endif
         if (cyw43_write_reg_u16(self, BUS_FUNCTION, SPI_INTERRUPT_ENABLE_REGISTER, cyw43_interrupts) != 0) {
-	    CYW43_VDEBUG("Break #4\n");
             break;
         }
 

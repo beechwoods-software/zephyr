@@ -29,12 +29,6 @@
 extern bool enable_spi_packet_dumping;  
 #endif
 
-// This is for the picowi PIO-SPI workaround for more detail, see the comments
-// in cyw43_bus_picowi_pio_spi.c
-#if defined(CONFIG_USE_PICOWI_PIOSPI)
-extern bool do_ridiculous_byte_reordering;
-#endif
-
 #include "pico.h"
 #include "hardware/gpio.h"
 //#include "pico/time.h"
