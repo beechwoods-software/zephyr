@@ -24,6 +24,7 @@ K_KERNEL_STACK_DEFINE(pico_w_cyw43_work_q_stack, PICOWCYW43_WORKQUEUE_STACK_SIZE
 
 static const struct pico_w_cyw43_cfg pico_w_cyw43_cfg = {
 	.irq_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(cyw43_int), gpios),
+	.wl_on_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(pico_w_cyw43), wl_on_gpios),
 };
 
 

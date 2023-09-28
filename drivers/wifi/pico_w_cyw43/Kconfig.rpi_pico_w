@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menuconfig WIFI_RPIPICOWCYW43
-	bool "Raspberry Pi Pico W Wifi support"
+	bool "Infineon CYW43 Wifi support"
 	default y
 	select NET_L2_WIFI_MGMT
 	select WIFI_USE_NATIVE_NETWORKING
@@ -14,10 +14,10 @@ menuconfig WIFI_RPIPICOWCYW43
 
         #comment these three out to use the picowi pio-spi
 	select GPIO
-	#select SPI # TODO: Seems like the line below should do this too?
-	#select SPI_PICO_PIO
+	select SPI # TODO: Seems like the line below should do this too?
+	select SPI_PICO_PIO
 	
-        select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
+        #select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
 	#select PICOSDK_USE_DMA
 	#select PICOSDK_USE_CLAIM
 	#select PICOSDK_USE_GPIO	
@@ -29,6 +29,12 @@ config WIFI_RPIPICOWCYW43_SHELL
 	depends on SHELL
 	help
 	  Enable CYW43 shell
+
+config WIFI_CYW43_USE_CYW4343W
+	bool "Use Infineon CYW4343W chip"
+	help
+		Use firmware for the CYW4343W chip in place of
+		the CYW43439 on the Raspberry Pi Pico W.
 
 config USE_PICOWI_PIOSPI
         bool "Use picowi PIO-SPI, but nothing else"

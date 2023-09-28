@@ -41,6 +41,5 @@ source "drivers/wifi/eswifi/Kconfig.eswifi"
 source "drivers/wifi/esp_at/Kconfig.esp_at"
 source "drivers/wifi/esp32/Kconfig.esp32"
 source "drivers/wifi/pico_w_cyw43/Kconfig.rpi_pico_w"
-source "drivers/wifi/cyw43/Kconfig.cyw43"
 
 endif # WIFI

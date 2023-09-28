@@ -39,10 +39,8 @@ enum pico_w_cyw43_role {
 };
 
 struct pico_w_cyw43_cfg {
-	struct gpio_dt_spec data;
-	struct gpio_dt_spec clock;
-  	struct gpio_dt_spec power;
-  	struct gpio_dt_spec irq_gpio;  
+  	struct gpio_dt_spec irq_gpio;
+    	struct gpio_dt_spec wl_on_gpio;
 };
 
 
