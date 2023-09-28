@@ -15,7 +15,7 @@ menuconfig WIFI_RPIPICOWCYW43
         #comment these three out to use the picowi pio-spi
 	select GPIO
 	select SPI # TODO: Seems like the line below should do this too?
-	select SPI_PICO_PIO
+	select SPI_RPI_PICO_PIO
 	
         #select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
 	#select PICOSDK_USE_DMA

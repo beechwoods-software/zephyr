@@ -38,10 +38,6 @@
 #error CYW43_USE_SPI should be true
 #endif
 
-#ifndef NDEBUG
-#define ENABLE_SPI_DUMPING 1
-#endif
-
 // Set to 1 to enable
 #if ENABLE_SPI_DUMPING //NDEBUG
 #if 0
