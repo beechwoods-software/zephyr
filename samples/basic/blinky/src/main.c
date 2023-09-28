@@ -19,6 +19,7 @@
  */
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
+
 int main(void)
 {
 	int ret;
@@ -26,13 +27,18 @@ int main(void)
 	if (!gpio_is_ready_dt(&led)) {
 		return 0;
 	}
-
+    printf("gpio_pin_configure_dt\n");
+	/*
 	ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
 	if (ret < 0) {
 		return 0;
 	}
-
-	while (1) {
+	*/
+    printf("gpio_pin_configure_dt done\n");
+    int i = 0;
+	while (i < 9) {
+        printf("Toggle %d\n", i++);
+		gpio_pin_set(led.port, led.pin, i%2);
 		ret = gpio_pin_toggle_dt(&led);
 		if (ret < 0) {
 			return 0;
