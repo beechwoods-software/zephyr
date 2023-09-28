@@ -28,15 +28,13 @@ int main(void)
 		return 0;
 	}
     printf("gpio_pin_configure_dt\n");
-	/*
 	ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
 	if (ret < 0) {
 		return 0;
 	}
-	*/
     printf("gpio_pin_configure_dt done\n");
     int i = 0;
-	while (i < 9) {
+	while (i < 15) {
         printf("Toggle %d\n", i++);
 		gpio_pin_set(led.port, led.pin, i%2);
 		ret = gpio_pin_toggle_dt(&led);
