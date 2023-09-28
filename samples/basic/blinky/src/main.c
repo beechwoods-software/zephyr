@@ -24,13 +24,17 @@ int main(void)
 	int ret;
 
 	if (!gpio_is_ready_dt(&led)) {
+        printf("Not Ready\n");
 		return 0;
 	}
+    printf("Ready\n");
 
 	ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
 	if (ret < 0) {
+    printf("Failed\n");
 		return 0;
 	}
+    printf("Success\n");
 
 	while (1) {
 		ret = gpio_pin_toggle_dt(&led);
