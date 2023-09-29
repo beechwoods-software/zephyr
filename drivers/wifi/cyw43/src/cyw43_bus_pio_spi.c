@@ -93,11 +93,10 @@ int cyw43_spi_init(cyw43_int_t *self) {
 
 
     spi->cfg = cfg;
+    assert(!self->bus_data);
     self->bus_data = spi;
 
     cyw43_spi_reset();
-    
-    assert(!self->bus_data);
     
     return 0;
 }
@@ -368,7 +367,7 @@ int cyw43_read_bytes(cyw43_int_t *self, uint32_t fn, uint32_t addr, size_t len, 
 // Note, uses spid_buf if src isn't using it already
 // Apart from firmware download this appears to only be used for wlan functions?
 int cyw43_write_bytes(cyw43_int_t *self, uint32_t fn, uint32_t addr, size_t len, const uint8_t *src) {
-    assert(fn != BACKPLANE_FUNCTION || (len <= 64 && (addr + len) <= 0x8000));
+    assert(fn != BACKPLANE_FUNCTION || (len <= CYW43_BUS_MAX_BLOCK_SIZE));
     size_t aligned_len = (len + 3) & ~3u;
     assert(aligned_len > 0 && aligned_len <= 0x7f8);
     if (fn == WLAN_FUNCTION) {
