@@ -138,10 +138,10 @@ ARM arch:
     - stephanosio
     - bbolen
     - povergoing
+    - ithinuel
   files:
     - arch/arm/
     - arch/arm/core/offsets/
-    - include/zephyr/arch/arm/aarch32/
     - include/zephyr/arch/arm/
     - tests/arch/arm/
     - doc/hardware/arch/arm_cortex_m.rst
@@ -194,6 +194,18 @@ Ambiq Platforms:
   labels:
     - "platform: Ambiq"
 
+Binary Descriptors:
+  status: maintained
+  maintainers:
+    - yonsch
+  files:
+    - subsys/bindesc/
+    - include/zephyr/bindesc.h
+    - samples/subsys/bindesc/
+    - scripts/west_commands/bindesc.py
+  labels:
+    - "area: Binary Descriptors"
+
 Bluetooth:
   status: maintained
   maintainers:
@@ -228,6 +240,7 @@ Bluetooth:
     - tests/bluetooth/host*/
     - tests/bluetooth/mesh_*/
     - tests/bluetooth/mesh/
+    - tests/bluetooth/audio/
     - tests/bsim/bluetooth/mesh/
     - tests/bluetooth/shell/audio*
   labels:
@@ -315,6 +328,7 @@ Bluetooth Audio:
   files:
     - subsys/bluetooth/audio/
     - include/zephyr/bluetooth/audio/
+    - tests/bluetooth/audio/
     - tests/bsim/bluetooth/audio/
     - tests/bluetooth/shell/audio*
   labels:
@@ -421,8 +435,9 @@ CMSIS-DSP integration:
     - stephanosio
   collaborators:
     - galak
+    - XenuIsWatching
   files:
-    - modules/cmsis/Kconfig.cmsis_dsp
+    - modules/cmsis-dsp/
     - tests/benchmarks/cmsis_dsp/
     - tests/lib/cmsis_dsp/
   labels:
@@ -434,8 +449,9 @@ CMSIS-NN integration:
     - JordanYates
   collaborators:
     - stephanosio
+    - XenuIsWatching
   files:
-    - modules/cmsis/Kconfig.cmsis_nn
+    - modules/cmsis-nn/
     - tests/lib/cmsis_nn/
   labels:
     - "area: CMSIS-NN"
@@ -711,6 +727,7 @@ Release Notes:
     - str4t0m
   files:
     - boards/shields/mcp2515/
+    - boards/shields/tcan4550evm/
     - doc/hardware/peripherals/canbus/
     - drivers/can/
     - drivers/net/canbus.c
@@ -1118,24 +1135,6 @@ Release Notes:
   labels:
     - "area: LED"
 
-"Drivers: lora":
-  status: maintained
-  maintainers:
-    - Mani-Sadhasivam
-  collaborators:
-    - mniestroj
-    - JordanYates
-  files:
-    - drivers/lora/
-    - include/zephyr/drivers/lora.h
-    - samples/drivers/lora/
-    - include/zephyr/lorawan/
-    - subsys/lorawan/
-    - samples/subsys/lorawan/
-    - doc/connectivity/lora_lorawan/index.rst
-  labels:
-    - "area: LoRa"
-
 "Drivers: Modem":
   status: maintained
   maintainers:
@@ -1147,15 +1146,6 @@ Release Notes:
     - include/zephyr/drivers/modem/
   labels:
     - "area: Modem"
-
-"Drivers: Neural Networks":
-  status: odd fixes
-  collaborators:
-    - nashif
-  files:
-    - drivers/neural_net/
-  labels:
-    - "area: Neural Networks"
 
 "Drivers: Regulators":
   status: maintained
@@ -1391,7 +1381,7 @@ Release Notes:
   maintainers:
     - str4t0m
   collaborators:
-    - dp7hgh7
+    - casparfriedrich
   files:
     - doc/hardware/peripherals/w1.rst
     - drivers/w1/
@@ -1716,6 +1706,25 @@ Logging:
   labels:
     - "area: Logging"
 
+LoRa and LoRaWAN:
+  status: maintained
+  maintainers:
+    - JordanYates
+  collaborators:
+    - Mani-Sadhasivam
+    - martinjaeger
+    - mniestroj
+  files:
+    - drivers/lora/
+    - include/zephyr/drivers/lora.h
+    - samples/drivers/lora/
+    - include/zephyr/lorawan/
+    - subsys/lorawan/
+    - samples/subsys/lorawan/
+    - doc/connectivity/lora_lorawan/index.rst
+  labels:
+    - "area: LoRa"
+
 MAINTAINERS file:
   status: maintained
   maintainers:
@@ -1919,6 +1928,7 @@ Networking:
     - subsys/net/conn_mgr/
     - tests/net/conn_mgr_monitor/
     - tests/net/conn_mgr_conn/
+    - doc/connectivity/networking/conn_mgr/
   labels:
     - "area: Networking"
 
@@ -1992,10 +2002,9 @@ Networking:
 "Networking: Native IEEE 802.15.4":
   status: maintained
   maintainers:
-    - tbursztyka
+    - fgrandel
   collaborators:
     - rlubos
-    - fgrandel
     - jukkar
   files:
     - doc/connectivity/networking/api/ieee802154.rst
@@ -2052,18 +2061,18 @@ NIOS-2 arch:
   labels:
     - "area: NIOS2"
 
-nRF52 BSIM:
+nRF BSIM:
   status: maintained
   maintainers:
     - aescolar
   files:
-    - boards/posix/nrf52_bsim/
+    - boards/posix/nrf_bsim/
     - tests/boards/nrf52_bsim/
     - tests/bsim/
   files-exclude:
     - tests/bsim/*/
   labels:
-    - "platform: nRF52 BSIM"
+    - "platform: nRF BSIM"
 
 POSIX API layer:
   status: maintained
@@ -2084,7 +2093,6 @@ Power management:
     - ceolin
   collaborators:
     - nashif
-    - gmarull
     - teburd
     - tmleman
     - JordanYates
@@ -2458,6 +2466,7 @@ NXP Platforms:
     - bperseghetti
     - dbaluta
     - iuliana-prodan
+    - Dat-NguyenDuy
   files:
     - boards/arm/mimx*/
     - boards/arm/frdm_k*/
@@ -2899,6 +2908,7 @@ West:
     - scripts/west-commands.yml
     - scripts/west_commands/
     - doc/develop/west/
+    - scripts/pylib/build_helpers/domains.py
   labels:
     - "area: West"
 
@@ -2938,8 +2948,28 @@ West:
     - povergoing
   files:
     - modules/cmsis/Kconfig
-    - modules/cmsis/Kconfig.cmsis_dsp
-    - modules/cmsis/Kconfig.cmsis_nn
+  labels:
+    - "area: ARM"
+
+"West project: cmsis-dsp":
+  status: maintained
+  maintainers:
+    - XenuIsWatching
+  collaborators:
+    - stephanosio
+  files:
+    - modules/cmsis-dsp/
+  labels:
+    - "area: ARM"
+
+"West project: cmsis-nn":
+  status: maintained
+  maintainers:
+    - XenuIsWatching
+  collaborators:
+    - stephanosio
+  files:
+    - modules/cmsis-nn/
   labels:
     - "area: ARM"
 
@@ -3010,10 +3040,9 @@ West:
   status: maintained
   maintainers:
     - sylvioalves
-    - glaubermaroto
-    - uLipe
   collaborators:
     - LucasTambor
+    - marekmatej
   files: []
   labels:
     - "platform: ESP32"
@@ -3023,6 +3052,7 @@ West:
   maintainers:
     - kristofer-jonsson-arm
   files:
+    - drivers/misc/ethos_u/
     - modules/hal_ethos_u/
   labels:
     - manifest-hal_ethos_u
@@ -3323,12 +3353,13 @@ West:
     - "area: Tracing"
 
 "West project: nanopb":
-  status: odd fixes
-  collaborators:
+  status: maintained
+  maintainers:
     - pdgendt
   files:
     - modules/nanopb/
     - samples/modules/nanopb/
+    - tests/modules/nanopb/
   labels:
     - "area: Serialization"
 
@@ -3374,6 +3405,16 @@ West:
     - modules/openthread/
   labels:
     - "area: OpenThread"
+
+"West project: percepio":
+  status: maintained
+  maintainers:
+    - eriktamlin
+    - aronlander-pe
+  files:
+    - modules/percepio/
+  labels:
+    - "area: Tracing"
 
 "West project: picolibc":
   status: maintained
@@ -3438,15 +3479,6 @@ West:
     - modules/Kconfig.tinycrypt
   labels:
     - "area: Crypto / RNG"
-
-"West project: TraceRecorderSource":
-  status: maintained
-  maintainers:
-    - eriktamlin
-  files:
-    - modules/TraceRecorder/
-  labels:
-    - "area: Tracing"
 
 "West project: trusted-firmware-m":
   status: maintained
@@ -3529,6 +3561,7 @@ Xtensa arch:
   collaborators:
     - andyross
     - nashif
+    - ceolin
   files:
     - arch/xtensa/
     - include/zephyr/arch/xtensa/
@@ -3648,3 +3681,18 @@ zbus:
     - doc/services/zbus/
   labels:
     - "area: zbus"
+
+"Linkable Loadable Extensions":
+  status: maintained
+  maintainers:
+    - teburd
+  collaborators:
+    - lyakh
+  files:
+    - samples/subsys/llext/
+    - include/zephyr/llext/
+    - tests/subsys/llext/
+    - subsys/llext/
+    - doc/services/llext/
+  labels:
+    - "area: Linkable Loadable Extensions"

@@ -670,10 +670,12 @@ static struct net_buf *bt_att_chan_create_pdu(struct bt_att_chan *chan, uint8_t 
 
 	switch (att_op_get_type(op)) {
 	case ATT_RESPONSE:
-	case ATT_CONFIRMATION:
-		/* Use a timeout only when responding/confirming */
+		/* Use a timeout only when responding */
 		timeout = BT_ATT_TIMEOUT;
 		re_use = true;
+		break;
+	case ATT_CONFIRMATION:
+		timeout = BT_ATT_TIMEOUT;
 		break;
 	default:
 		timeout = K_FOREVER;
@@ -701,7 +703,7 @@ static struct net_buf *bt_att_chan_create_pdu(struct bt_att_chan *chan, uint8_t 
 			 * This is better than an assert as an assert would
 			 * allow a peer to DoS us.
 			 */
-			LOG_ERR("already processing a transaction on chan %p", chan);
+			LOG_ERR("already processing a REQ/RSP on chan %p", chan);
 
 			return NULL;
 		}
@@ -3723,7 +3725,8 @@ int bt_eatt_reconfigure(struct bt_conn *conn, uint16_t mtu)
 #endif /* CONFIG_BT_TESTING */
 #endif /* CONFIG_BT_EATT */
 
-static int bt_eatt_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan)
+static int bt_eatt_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
+			  struct bt_l2cap_chan **chan)
 {
 	struct bt_att_chan *att_chan = att_get_fixed_chan(conn);
 	struct bt_att *att = att_chan->att;

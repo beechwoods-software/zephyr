@@ -17,8 +17,6 @@ LOG_MODULE_DECLARE(modem_backend_uart);
 #define MODEM_BACKEND_UART_ASYNC_STATE_RX_BUF1_USED_BIT       (2)
 #define MODEM_BACKEND_UART_ASYNC_STATE_RX_RBUF_USED_INDEX_BIT (3)
 
-#define MODEM_BACKEND_UART_ASYNC_BLOCK_MIN_SIZE (8)
-
 static void modem_backend_uart_async_flush(struct modem_backend_uart *backend)
 {
 	uint8_t c;
@@ -57,6 +55,13 @@ static void modem_backend_uart_async_event_handler(const struct device *dev,
 
 	switch (evt->type) {
 	case UART_TX_DONE:
+		atomic_clear_bit(&backend->async.state,
+				 MODEM_BACKEND_UART_ASYNC_STATE_TRANSMITTING_BIT);
+
+		break;
+
+	case UART_TX_ABORTED:
+		LOG_WRN("Transmit aborted");
 		atomic_clear_bit(&backend->async.state,
 				 MODEM_BACKEND_UART_ASYNC_STATE_TRANSMITTING_BIT);
 
@@ -116,8 +121,13 @@ static void modem_backend_uart_async_event_handler(const struct device *dev,
 		k_work_submit(&backend->receive_ready_work);
 		break;
 
-	case UART_TX_ABORTED:
-		LOG_WRN("Transmit aborted");
+	case UART_RX_DISABLED:
+		k_work_submit(&backend->async.rx_disabled_work);
+		break;
+
+	case UART_RX_STOPPED:
+		LOG_WRN("Receive stopped for reasons: %u", (uint8_t)evt->data.rx_stop.reason);
+		break;
 
 	default:
 		break;
@@ -176,7 +186,7 @@ static int modem_backend_uart_async_transmit(void *data, const uint8_t *buf, siz
 	memcpy(backend->async.transmit_buf, buf, bytes_to_transmit);
 
 	ret = uart_tx(backend->uart, backend->async.transmit_buf, bytes_to_transmit,
-		      SYS_FOREVER_US);
+		      CONFIG_MODEM_BACKEND_UART_ASYNC_TRANSMIT_TIMEOUT_MS * 1000L);
 
 	if (ret < 0) {
 		LOG_WRN("Failed to start async transmit");
@@ -220,7 +230,6 @@ static int modem_backend_uart_async_close(void *data)
 	struct modem_backend_uart *backend = (struct modem_backend_uart *)data;
 
 	uart_rx_disable(backend->uart);
-	modem_pipe_notify_closed(&backend->pipe);
 	return 0;
 }
 
@@ -235,6 +244,17 @@ bool modem_backend_uart_async_is_supported(struct modem_backend_uart *backend)
 {
 	return uart_callback_set(backend->uart, modem_backend_uart_async_event_handler,
 				 backend) == 0;
+}
+
+static void modem_backend_uart_async_notify_closed(struct k_work *item)
+{
+	struct modem_backend_uart_async *async =
+		CONTAINER_OF(item, struct modem_backend_uart_async, rx_disabled_work);
+
+	struct modem_backend_uart *backend =
+		CONTAINER_OF(async, struct modem_backend_uart, async);
+
+	modem_pipe_notify_closed(&backend->pipe);
 }
 
 void modem_backend_uart_async_init(struct modem_backend_uart *backend,
@@ -256,5 +276,6 @@ void modem_backend_uart_async_init(struct modem_backend_uart *backend,
 
 	backend->async.transmit_buf = config->transmit_buf;
 	backend->async.transmit_buf_size = config->transmit_buf_size;
+	k_work_init(&backend->async.rx_disabled_work, modem_backend_uart_async_notify_closed);
 	modem_pipe_init(&backend->pipe, backend, &modem_backend_uart_async_api);
 }

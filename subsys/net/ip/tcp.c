@@ -1923,6 +1923,26 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 		goto err;
 	}
 
+	/* The newly created context object for the new TCP client connection needs
+	 * all four parameters of the tuple (local address, local port, remote
+	 * address, remote port) to be properly identified. Remote address and port
+	 * are already copied above from conn->dst. The call to net_context_bind
+	 * with the prepared local_addr further copies the local address. However,
+	 * this call wont copy the local port, as the bind would then fail due to
+	 * an address/port reuse without the REUSEPORT option enables for both
+	 * connections. Therefore, we copy the port after the bind call.
+	 * It is safe to bind to this address/port combination, as the new TCP
+	 * client connection is separated from the local listening connection
+	 * by the specified remote address and remote port.
+	 */
+	if (IS_ENABLED(CONFIG_NET_IPV6) &&
+	    net_context_get_family(context) == AF_INET6) {
+		net_sin6_ptr(&context->local)->sin6_port = conn->src.sin6.sin6_port;
+	} else if (IS_ENABLED(CONFIG_NET_IPV4) &&
+		   net_context_get_family(context) == AF_INET) {
+		net_sin_ptr(&context->local)->sin_port = conn->src.sin.sin_port;
+	}
+
 	if (!(IS_ENABLED(CONFIG_NET_TEST_PROTOCOL) ||
 	      IS_ENABLED(CONFIG_NET_TEST))) {
 		conn->seq = tcp_init_isn(&local_addr, &context->remote);
@@ -2276,7 +2296,7 @@ static enum net_verdict tcp_in(struct tcp *conn, struct net_pkt *pkt)
 		tcp_out(conn, RST);
 		do_close = true;
 		close_status = -ECONNRESET;
-		goto next_state;
+		goto out;
 	}
 
 	if (FL(&fl, &, RST)) {
@@ -2292,7 +2312,7 @@ static enum net_verdict tcp_in(struct tcp *conn, struct net_pkt *pkt)
 		net_stats_update_tcp_seg_rst(net_pkt_iface(pkt));
 		do_close = true;
 		close_status = -ECONNRESET;
-		goto next_state;
+		goto out;
 	}
 
 	if (tcp_options_len && !tcp_options_check(&conn->recv_options, pkt,
@@ -2301,7 +2321,7 @@ static enum net_verdict tcp_in(struct tcp *conn, struct net_pkt *pkt)
 		tcp_out(conn, RST);
 		do_close = true;
 		close_status = -ECONNRESET;
-		goto next_state;
+		goto out;
 	}
 
 	if (th && (conn->state != TCP_LISTEN) && (conn->state != TCP_SYN_SENT) &&
@@ -2316,7 +2336,7 @@ static enum net_verdict tcp_in(struct tcp *conn, struct net_pkt *pkt)
 		tcp_out(conn, RST);
 		do_close = true;
 		close_status = -ECONNRESET;
-		goto next_state;
+		goto out;
 	}
 
 	if (th) {
@@ -2904,6 +2924,7 @@ next_state:
 			   tcp_state_to_str(conn->state, true));
 	}
 
+out:
 	if (pkt) {
 		if (verdict == NET_OK) {
 			net_pkt_unref(pkt);

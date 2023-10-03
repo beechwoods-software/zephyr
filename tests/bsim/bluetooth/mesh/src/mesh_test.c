@@ -166,6 +166,14 @@ static struct bt_mesh_model_pub health_pub = {
 static struct bt_mesh_sar_cfg_cli sar_cfg_cli;
 #endif
 
+#if defined(CONFIG_BT_MESH_PRIV_BEACONS)
+static struct bt_mesh_priv_beacon_cli priv_beacon_cli;
+#endif
+
+#if defined(CONFIG_BT_MESH_OD_PRIV_PROXY_CLI)
+static struct bt_mesh_od_priv_proxy_cli priv_proxy_cli;
+#endif
+
 static struct bt_mesh_model models[] = {
 	BT_MESH_MODEL_CFG_SRV,
 	BT_MESH_MODEL_CFG_CLI(&cfg_cli),
@@ -174,6 +182,16 @@ static struct bt_mesh_model models[] = {
 #if defined(CONFIG_BT_MESH_SAR_CFG)
 	BT_MESH_MODEL_SAR_CFG_SRV,
 	BT_MESH_MODEL_SAR_CFG_CLI(&sar_cfg_cli),
+#endif
+#if defined(CONFIG_BT_MESH_PRIV_BEACONS)
+	BT_MESH_MODEL_PRIV_BEACON_SRV,
+	BT_MESH_MODEL_PRIV_BEACON_CLI(&priv_beacon_cli),
+#endif
+#if defined(CONFIG_BT_MESH_OD_PRIV_PROXY_SRV)
+	BT_MESH_MODEL_OD_PRIV_PROXY_SRV,
+#endif
+#if defined(CONFIG_BT_MESH_OD_PRIV_PROXY_CLI)
+	BT_MESH_MODEL_OD_PRIV_PROXY_CLI(&priv_proxy_cli),
 #endif
 };
 

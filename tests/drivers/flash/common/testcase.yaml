@@ -41,6 +41,9 @@ tests:
       - it8xxx2_evb
       - mimxrt685_evk_cm33
       - mimxrt595_evk_cm33
+      - nrf52_bsim
+      - nrf5340bsim_nrf5340_cpunet
+      - nrf5340bsim_nrf5340_cpuapp
   drivers.flash.common.tfm_ns:
     build_only: true
     filter: (CONFIG_FLASH_HAS_DRIVER_ENABLED and CONFIG_TRUSTED_EXECUTION_NONSECURE
@@ -79,3 +82,13 @@ tests:
     platform_allow: mr_canhubk3
     extra_configs:
       - CONFIG_FLASH_NXP_S32_QSPI_NOR_SFDP_RUNTIME=y
+  drivers.flash.common.spi_nor:
+    platform_allow: nrf52840dk_nrf52840
+    extra_args:
+      - OVERLAY_CONFIG=boards/nrf52840dk_flash_spi.conf
+      - DTC_OVERLAY_FILE=boards/nrf52840dk_spi_nor.overlay
+  drivers.flash.common.spi_nor_wp_hold:
+    platform_allow: nrf52840dk_nrf52840
+    extra_args:
+      - OVERLAY_CONFIG=boards/nrf52840dk_flash_spi.conf
+      - DTC_OVERLAY_FILE=boards/nrf52840dk_spi_nor_wp_hold.overlay

@@ -28,6 +28,7 @@
 #include <zephyr/bluetooth/att.h>
 
 #include "common/assert.h"
+#include "common/bt_str.h"
 
 #include "addr_internal.h"
 #include "hci_core.h"
@@ -655,21 +656,6 @@ fail:
 	return err;
 }
 
-static size_t iso_hdr_len(struct net_buf *buf, struct bt_conn *conn)
-{
-#if defined(CONFIG_BT_ISO)
-	if (conn->type == BT_CONN_TYPE_ISO) {
-		if (tx_data(buf)->iso_has_ts) {
-			return BT_HCI_ISO_TS_DATA_HDR_SIZE;
-		} else {
-			return BT_HCI_ISO_DATA_HDR_SIZE;
-		}
-	}
-#endif
-
-	return 0;
-}
-
 static int send_frag(struct bt_conn *conn,
 		     struct net_buf *buf, struct net_buf *frag,
 		     uint8_t flags)
@@ -682,9 +668,7 @@ static int send_frag(struct bt_conn *conn,
 
 	/* Add the data to the buffer */
 	if (frag) {
-		size_t iso_hdr = flags == FRAG_START ? iso_hdr_len(buf, conn) : 0;
-		uint16_t frag_len = MIN(conn_mtu(conn) + iso_hdr,
-					net_buf_tailroom(frag));
+		uint16_t frag_len = MIN(conn_mtu(conn), net_buf_tailroom(frag));
 
 		net_buf_add_mem(frag, buf->data, frag_len);
 		net_buf_pull(buf, frag_len);
@@ -728,13 +712,9 @@ static struct net_buf *create_frag(struct bt_conn *conn, struct net_buf *buf)
 	/* Fragments never have a TX completion callback */
 	tx_data(frag)->tx = NULL;
 	tx_data(frag)->is_cont = false;
+	tx_data(frag)->iso_has_ts = tx_data(buf)->iso_has_ts;
 
 	return frag;
-}
-
-static bool fits_single_ctlr_buf(struct net_buf *buf, struct bt_conn *conn)
-{
-	return buf->len - iso_hdr_len(buf, conn) <= conn_mtu(conn);
 }
 
 static int send_buf(struct bt_conn *conn, struct net_buf *buf)
@@ -746,7 +726,7 @@ static int send_buf(struct bt_conn *conn, struct net_buf *buf)
 	LOG_DBG("conn %p buf %p len %u", conn, buf, buf->len);
 
 	/* Send directly if the packet fits the ACL MTU */
-	if (fits_single_ctlr_buf(buf, conn) && !tx_data(buf)->is_cont) {
+	if (buf->len <= conn_mtu(conn) && !tx_data(buf)->is_cont) {
 		LOG_DBG("send single");
 		return send_frag(conn, buf, NULL, FRAG_SINGLE);
 	}
@@ -2367,7 +2347,8 @@ bool bt_conn_exists_le(uint8_t id, const bt_addr_le_t *peer)
 		 * still has valid references. The last reference of the stack
 		 * is released after the disconnected callback.
 		 */
-		LOG_WRN("Found valid connection in %s state", state2str(conn->state));
+		LOG_WRN("Found valid connection (%p) with address %s in %s state ", conn,
+			bt_addr_le_str(peer), state2str(conn->state));
 		bt_conn_unref(conn);
 		return true;
 	}

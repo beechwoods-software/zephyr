@@ -56,6 +56,8 @@ ADC SAR       on-chip     adc
 LPSPI         on-chip     spi
 WDT           FS26 SBC    watchdog
 EMAC          on-chip     ethernet
+eMIOS         on-chip     pwm
+EDMA          on-chip     dma
 ============  ==========  ================================
 
 The default configuration can be found in the Kconfig file

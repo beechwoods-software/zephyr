@@ -8,8 +8,12 @@
 #include <zephyr/kernel.h>
 #include <lvgl.h>
 #include "lvgl_display.h"
+#include "lvgl_common_input.h"
 #ifdef CONFIG_LV_Z_USE_FILESYSTEM
 #include "lvgl_fs.h"
+#endif
+#ifdef CONFIG_LV_Z_MEM_POOL_SYS_HEAP
+#include "lvgl_mem.h"
 #endif
 #include LV_MEM_CUSTOM_INCLUDE
 
@@ -190,7 +194,6 @@ static int lvgl_allocate_rendering_buffers(lv_disp_drv_t *disp_driver)
 
 static int lvgl_init(void)
 {
-
 	const struct device *display_dev = DEVICE_DT_GET(DISPLAY_NODE);
 
 	int err = 0;
@@ -199,6 +202,10 @@ static int lvgl_init(void)
 		LOG_ERR("Display device not ready.");
 		return -ENODEV;
 	}
+
+#ifdef CONFIG_LV_Z_MEM_POOL_SYS_HEAP
+	lvgl_heap_init();
+#endif
 
 #if CONFIG_LV_LOG_LEVEL != 0
 	lv_log_register_print_cb(lvgl_log);
@@ -235,12 +242,13 @@ static int lvgl_init(void)
 		return -EPERM;
 	}
 
+	err = lvgl_init_input_devices();
+	if (err < 0) {
+		LOG_ERR("Failed to initialize input devices.");
+		return err;
+	}
+
 	return 0;
 }
-
-BUILD_ASSERT(CONFIG_APPLICATION_INIT_PRIORITY < CONFIG_LV_Z_INPUT_INIT_PRIORITY);
-#ifdef CONFIG_INPUT
-BUILD_ASSERT(CONFIG_INPUT_INIT_PRIORITY < CONFIG_LV_Z_INPUT_INIT_PRIORITY);
-#endif /* CONFIG_INPUT */
 
 SYS_INIT(lvgl_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
