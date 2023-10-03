@@ -12,7 +12,7 @@
 	pio0_spi0_default: pio0_spi0_default {
 	        /* gpio 25 is used for chip select, not assigned to the PIO */
 		group1 {
-			pinmux = <PIO0_P29>, <PIO0_P23>;
+			pinmux = <PIO0_P29>, <PIO0_P24>;
 		};
 	};
 
