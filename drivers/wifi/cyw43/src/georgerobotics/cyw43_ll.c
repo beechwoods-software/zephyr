@@ -1133,9 +1133,6 @@ static int cyw43_ll_sdpcm_poll_device(cyw43_int_t *self, size_t *len, uint8_t **
         self->had_successful_packet = false;
         return -1;
     }
-#if defined(CONFIG_USE_PICOWI_PIOSPI)
-    do_ridiculous_byte_reordering=false;
-#endif
     int ret = cyw43_read_bytes(self, WLAN_FUNCTION, 0, bytes_pending, self->spid_buf);
     if (ret != 0) {
         return ret;
