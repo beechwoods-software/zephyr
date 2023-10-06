@@ -31,10 +31,81 @@ static const struct cyw43_cfg cyw43_cfg = {
 #ifdef ISR_EVENT_PROCESSING
 	.irq_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(cyw43_int), gpios),
 #endif
-  .wl_on_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(cyw43), wl_on_gpios),
+  .wl_on_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(pico_w_cyw43), wl_on_gpios),
+  .wl_host_wake_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(pico_w_cyw43), wl_host_wake_gpios),
 };
 
+int cyw43_hal_pin_read(cyw43_hal_pin_obj_t pin) {
+    switch (pin) {
+        case CYW43_PIN_WL_REG_ON:
+          return gpio_pin_get_dt(&cyw43_cfg.wl_on_gpio);
 
+        case CYW43_PIN_WL_HOST_WAKE:
+          return gpio_pin_get_dt(&cyw43_cfg.wl_host_wake_gpio);
+
+        default:
+          LOG_ERR("Unknown CYW43 HAL pin: %d\n", pin);
+          break;
+    }
+
+    return 0;
+}
+
+void cyw43_hal_pin_low(cyw43_hal_pin_obj_t pin) {
+    switch (pin) {
+        case CYW43_PIN_WL_REG_ON:
+          gpio_pin_set_dt(&cyw43_cfg.wl_on_gpio, 0);
+          break;
+
+        case CYW43_PIN_WL_HOST_WAKE:
+          gpio_pin_set_dt(&cyw43_cfg.wl_host_wake_gpio, 0);
+          break;
+
+        default:
+          LOG_ERR("Unknown CYW43 HAL pin: %d\n", pin);
+          break;
+    }
+}
+
+void cyw43_hal_pin_high(cyw43_hal_pin_obj_t pin) {
+    switch (pin) {
+        case CYW43_PIN_WL_REG_ON:
+          gpio_pin_set_dt(&cyw43_cfg.wl_on_gpio, 1);
+          break;
+
+        case CYW43_PIN_WL_HOST_WAKE:
+          gpio_pin_set_dt(&cyw43_cfg.wl_host_wake_gpio, 1);
+          break;
+
+        default:
+          LOG_ERR("Unknown CYW43 HAL pin: %d\n", pin);
+          break;
+    }
+}
+
+void cyw43_hal_pin_config(cyw43_hal_pin_obj_t pin, uint32_t mode, uint32_t pull, __unused uint32_t alt) {
+    uint gpio_pin;
+
+    assert((mode == CYW43_HAL_PIN_MODE_INPUT || mode == CYW43_HAL_PIN_MODE_OUTPUT) && alt == 0);
+
+    switch (pin) {
+        case CYW43_PIN_WL_REG_ON:
+          gpio_pin = cyw43_cfg.wl_on_gpio.pin;
+          printf("SB:  CYW43_PIN_WL_REG_ON=%d\n", gpio_pin);
+          break;
+
+        case CYW43_PIN_WL_HOST_WAKE:
+          gpio_pin = cyw43_cfg.wl_host_wake_gpio.pin;
+          break;
+
+        default:
+          LOG_ERR("Unknown CYW43 HAL pin: %d\n", pin);
+          return;
+    }
+
+    gpio_set_dir(gpio_pin, mode);
+    gpio_set_pulls(gpio_pin, pull == CYW43_HAL_PIN_PULL_UP, pull == CYW43_HAL_PIN_PULL_DOWN);
+}
 
 static struct cyw43_dev cyw43_0; /* static instance */
 

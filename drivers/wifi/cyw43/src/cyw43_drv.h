@@ -43,7 +43,8 @@ struct cyw43_cfg {
 	struct gpio_dt_spec clock;
   	struct gpio_dt_spec power;
   	struct gpio_dt_spec irq_gpio;  
-  	struct gpio_dt_spec wl_on_gpio;  
+  	struct gpio_dt_spec wl_on_gpio;
+	struct gpio_dt_spec wl_host_wake_gpio;
 };
 
 

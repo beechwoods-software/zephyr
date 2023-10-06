@@ -106,17 +106,11 @@ static inline uint32_t cyw43_hal_ticks_ms(void) {
     return k_uptime_get_32();
 }
 
-static inline int cyw43_hal_pin_read(cyw43_hal_pin_obj_t pin) {
-    return gpio_get(pin);
-}
+int cyw43_hal_pin_read(cyw43_hal_pin_obj_t pin);
 
-static inline void cyw43_hal_pin_low(cyw43_hal_pin_obj_t pin) {
-    gpio_clr_mask(1 << pin);
-}
+void cyw43_hal_pin_low(cyw43_hal_pin_obj_t pin);
 
-static inline void cyw43_hal_pin_high(cyw43_hal_pin_obj_t pin) {
-    gpio_set_mask(1 << pin);
-}
+void cyw43_hal_pin_high(cyw43_hal_pin_obj_t pin);
 
 #define CYW43_HAL_PIN_MODE_INPUT           (GPIO_IN)
 #define CYW43_HAL_PIN_MODE_OUTPUT          (GPIO_OUT)
@@ -131,11 +125,7 @@ static inline void cyw43_hal_pin_high(cyw43_hal_pin_obj_t pin) {
   
 #define __uint16_t uint16_t
 
-static inline void cyw43_hal_pin_config(cyw43_hal_pin_obj_t pin, uint32_t mode, uint32_t pull, __unused uint32_t alt) {
-    assert((mode == CYW43_HAL_PIN_MODE_INPUT || mode == CYW43_HAL_PIN_MODE_OUTPUT) && alt == 0);
-    gpio_set_dir(pin, mode);
-    gpio_set_pulls(pin, pull == CYW43_HAL_PIN_PULL_UP, pull == CYW43_HAL_PIN_PULL_DOWN);
-}
+void cyw43_hal_pin_config(cyw43_hal_pin_obj_t pin, uint32_t mode, uint32_t pull, __unused uint32_t alt);
 
 void cyw43_hal_get_mac(int idx, uint8_t buf[6]);
 

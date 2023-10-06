@@ -15,3 +15,6 @@ properties:
   wl-on-gpios:
     type: phandle-array
 
+  wl_host_wake_gpios:
+    type: phandle-array
+
