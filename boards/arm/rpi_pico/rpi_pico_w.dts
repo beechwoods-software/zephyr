@@ -39,6 +39,16 @@
 			spi-max-frequency = < 1000000 >;
 			wl-on-gpios = < &gpio0 23 GPIO_ACTIVE_HIGH >;
 		};
+        pico_w_cyw43@1 {
+		    compatible = "infineon,cyw43_led";
+		    reg = < 0x0 >;
+		    spi-max-frequency = <1000000>;
+		    led0: led_0 {		/* Pico W LED is on CYW43439 GPIO 0 */
+		        compatible = "gpio-leds";
+		        gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+		        label = "LED";
+            };
+		};
 	};
 };
 

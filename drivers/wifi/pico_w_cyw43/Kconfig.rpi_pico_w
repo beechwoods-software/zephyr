@@ -15,7 +15,7 @@ menuconfig WIFI_RPIPICOWCYW43
         #comment these three out to use the picowi pio-spi
 	select GPIO
 	select SPI # TODO: Seems like the line below should do this too?
-	select SPI_RPI_PICO_PIO
+	#select SPI_RPI_PICO_PIO
 	
         #select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
 	#select PICOSDK_USE_DMA
@@ -43,6 +43,10 @@ config USE_PICOWI_PIOSPI
 config BUILD_CYW43_WITH_ZEPHYR_PIO_SPI
         bool "Use Zephyr's PIO SPI bus"
 	default n
+
+config LED_INIT_PRIORITY
+    int "Wifi led driver init priority"
+    default 80
 
 #
 #choice WIFI_RPIPICOWCYW43_BUS
