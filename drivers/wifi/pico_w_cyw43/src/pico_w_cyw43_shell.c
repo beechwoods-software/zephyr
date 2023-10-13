@@ -9,10 +9,10 @@
 
 #include "pico_w_cyw43_drv.h"
 
-static struct pico_w_cyw43_dev *pico_w_cyw43;
+static struct pico_w_cyw43_dev_t *pico_w_cyw43;
 
 #if defined(CONFIG_WIFI_RPIPICOWCYW43_SHELL)
-void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev *dev)
+void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev_t *dev)
 {
 	/* only one instance supported */
 	if (pico_w_cyw43) {

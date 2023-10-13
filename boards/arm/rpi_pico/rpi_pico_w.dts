@@ -38,18 +38,8 @@
 			reg = < 0x0 >;
 			spi-max-frequency = < 1000000 >;
 			wl-on-gpios = < &gpio0 23 GPIO_ACTIVE_HIGH >;
+			host-wake-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;	
 		};
 	};
 };
 
-
-/ {
-	cyw43_interrupts {
-	     compatible = "gpio-keys";
-	     debounce-interval-ms = <1>;
-  	     cyw43_int: cyw43_int {
-		  gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;      
-		  label = "Interrupt from cyw43 module";
-	     };
-  	};
-};

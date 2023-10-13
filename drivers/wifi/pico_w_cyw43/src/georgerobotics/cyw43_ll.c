@@ -361,7 +361,7 @@ static int cyw43_download_resource(cyw43_int_t *self, uint32_t addr, size_t raw_
     // round up len to simplify download
     size_t len = (raw_len + 255) & ~255;
 
-    CYW43_VDEBUG("writing %lu bytes to 0x%lx\n", (unsigned long)len, (unsigned long)addr);
+    CYW43_VDEBUG("writing %u bytes to 0x%x\n", (uint32_t)len, (uint32_t)addr);
 
     uint32_t block_size = CYW43_BUS_MAX_BLOCK_SIZE;
     if (from_storage) {
@@ -772,12 +772,7 @@ static int cyw43_send_ioctl(cyw43_int_t *self, uint32_t kind, uint32_t cmd, size
     memcpy(self->spid_buf + SDPCM_HEADER_LEN + 16, buf, len);
 
     // do transfer
-    CYW43_VDEBUG("Sending cmd %s (%lu) len %lu flags %lu status %lu\n",
-		 ioctl_cmd_name(header->cmd),
-		 (unsigned long int)header->cmd,
-		 (unsigned long int)header->len,
-		 (unsigned long int)header->flags,
-		 (unsigned long int)header->status);
+    CYW43_VDEBUG("Sending cmd %s (%u) len %u flags %u status %u\n", ioctl_cmd_name(header->cmd), header->cmd, header->len, header->flags, header->status);
     if (header->cmd == WLC_SET_VAR || header->cmd == WLC_GET_VAR) {
         CYW43_VDEBUG("%s %s\n", ioctl_cmd_name(header->cmd), (const char *)buf);
     }
@@ -1112,7 +1107,7 @@ static int cyw43_ll_sdpcm_poll_device(cyw43_int_t *self, size_t *len, uint8_t **
             break;
         }
     }
-    CYW43_VDEBUG("bus_gspi_status 0x%lx 0x%lx\n", (unsigned long)bus_gspi_status, (unsigned long)bus_gspi_status >> 9);
+    CYW43_VDEBUG("bus_gspi_status 0x%x 0x%x\n", bus_gspi_status, bus_gspi_status >> 9);
     if (bus_gspi_status == 0xFFFFFFFF) {
         return -1;
     }
@@ -1122,7 +1117,7 @@ static int cyw43_ll_sdpcm_poll_device(cyw43_int_t *self, size_t *len, uint8_t **
         bytes_pending = (bus_gspi_status >> 9) & 0x7FF;
         if (bytes_pending == 0 || bytes_pending > (LINK_MTU - GSPI_PACKET_OVERHEAD) ||
             bus_gspi_status & F2_F3_FIFO_RD_UNDERFLOW) {
-	  CYW43_DEBUG("SPI invalid bytes pending %lu\n", (unsigned long) bytes_pending);
+            CYW43_DEBUG("SPI invalid bytes pending %u\n", bytes_pending);
             cyw43_write_reg_u8(self, BACKPLANE_FUNCTION, SPI_FRAME_CONTROL, (1 << 0));
             self->had_successful_packet = false;
             return -1;
@@ -1186,12 +1181,15 @@ void cyw43_ll_process_packets(cyw43_ll_t *self_in) {
 // will read the ioctl from buf
 // will then write the result (max len bytes) into buf
 static int cyw43_do_ioctl(cyw43_int_t *self, uint32_t kind, uint32_t cmd, size_t len, uint8_t *buf, uint32_t iface) {
-    cyw43_send_ioctl(self, kind, cmd, len, buf, iface);
+    int ret = cyw43_send_ioctl(self, kind, cmd, len, buf, iface);
+    if (ret != 0) {
+        return ret;
+    }
     uint32_t start = cyw43_hal_ticks_us();
     while (cyw43_hal_ticks_us() - start < CYW43_IOCTL_TIMEOUT_US) {
         size_t res_len;
         uint8_t *res_buf;
-        int ret = cyw43_ll_sdpcm_poll_device(self, &res_len, &res_buf);
+        ret = cyw43_ll_sdpcm_poll_device(self, &res_len, &res_buf);
         if (ret == CONTROL_HEADER) {
             #if CYW43_USE_STATS
             uint32_t time_us = cyw43_hal_ticks_us() - start;
@@ -1276,6 +1274,7 @@ static void device_core_is_up(cyw43_int_t *self, int core_id) {
     CYW43_VDEBUG("core %d IS up\n", core_id);
 }
 
+#if USE_KSO
 // KSO mode (keep SDIO on)
 static void cyw43_kso_set(cyw43_int_t *self, int value) {
     uint8_t write_value = 0;
@@ -1318,6 +1317,7 @@ static void cyw43_kso_set(cyw43_int_t *self, int value) {
 
     CYW43_WARN("cyw43_kso_set(%d): failed\n", value);
 }
+#endif
 
 static void cyw43_ll_bus_sleep_helper(cyw43_int_t *self, bool can_sleep) {
     #if USE_KSO
@@ -1405,7 +1405,7 @@ static void cyw43_clm_load(cyw43_int_t *self, const uint8_t *clm_ptr, size_t clm
         #pragma GCC diagnostic pop
         memcpy(buf + 20, clm_ptr + off, len);
 
-        CYW43_VDEBUG("clm data send %lu/%zu\n", (unsigned long)(off + len), clm_len);
+        CYW43_VDEBUG("clm data send %u/%u\n", off + len, clm_len);
 
         // Send data aligned to 8 bytes; padding comes from junk at end of buf
         cyw43_do_ioctl(self, SDPCM_SET, WLC_SET_VAR, ALIGN_UINT(20 + len, 8), buf, WWD_STA_INTERFACE);
@@ -1485,14 +1485,14 @@ int cyw43_ll_bus_init(cyw43_ll_t *self_in, const uint8_t *mac) {
         break; // failed
     chip_up:
         // Switch to 32bit mode
-        CYW43_VDEBUG("setting SPI_BUS_CONTROL 0x%lx\n", (long unsigned int) val);
+        CYW43_VDEBUG("setting SPI_BUS_CONTROL 0x%x\n", val);
 
         if (write_reg_u32_swap(self, BUS_FUNCTION, SPI_BUS_CONTROL, val) != 0) {
             break;
         }
 
         val = cyw43_read_reg_u32(self, BUS_FUNCTION, SPI_BUS_CONTROL);
-        CYW43_VDEBUG("read SPI_BUS_CONTROL 0x%lx\n", (long unsigned int) val);
+        CYW43_VDEBUG("read SPI_BUS_CONTROL 0x%x\n", val);
 
         if (cyw43_write_reg_u8(self, BUS_FUNCTION, SPI_RESP_DELAY_F1, CYW43_BACKPLANE_READ_PAD_LEN_BYTES) != 0) {
             break;
@@ -1659,13 +1659,13 @@ alp_set:
     cyw43_write_backplane(self, SOCSRAM_BANKX_INDEX, 4, 0x3);
     cyw43_write_backplane(self, SOCSRAM_BANKX_PDA, 4, 0);
 
-    // Take firmware from the address space
-    cyw43_download_resource(self, 0x00000000, CYW43_WIFI_FW_LEN, 0, fw_data);
-    /*
-    // Take firmware from storage block device
-    cyw43_download_resource(self, 0x00000000, CYW43_WIFI_FW_LEN, 1, 0x100 + 0x1000);
-    */
+    // Download the main WiFi firmware blob to the 43xx device.
+    int ret = cyw43_download_resource(self, 0x00000000, CYW43_WIFI_FW_LEN, 0, fw_data);
+    if (ret != 0) {
+        return ret;
+    }
 
+    // Download the NVRAM to the 43xx device.
     size_t wifi_nvram_len = ALIGN_UINT(sizeof(wifi_nvram_4343), 64);
     const uint8_t *wifi_nvram_data = wifi_nvram_4343;
     cyw43_download_resource(self, CYW43_RAM_SIZE - 4 - wifi_nvram_len, wifi_nvram_len, 0, (uintptr_t)wifi_nvram_data);
@@ -2087,7 +2087,7 @@ int cyw43_ll_wifi_join(cyw43_ll_t *self_in, size_t ssid_len, const uint8_t *ssid
         return -CYW43_EINVAL;
     }
 
-    CYW43_VDEBUG("Setting wsec=0x%lx\n", (unsigned long)auth_type & 0xff);
+    CYW43_VDEBUG("Setting wsec=0x%x\n", auth_type & 0xff);
     cyw43_set_ioctl_u32(self, WLC_SET_WSEC, auth_type & 0xff, WWD_STA_INTERFACE);
 
     // supplicant variable
@@ -2122,7 +2122,7 @@ int cyw43_ll_wifi_join(cyw43_ll_t *self_in, size_t ssid_len, const uint8_t *ssid
     cyw43_set_ioctl_u32(self, WLC_SET_AUTH, 0, WWD_STA_INTERFACE);
 
     // set WPA auth mode
-    CYW43_VDEBUG("Setting wpa auth 0x%lx\n", (unsigned long)wpa_auth);
+    CYW43_VDEBUG("Setting wpa auth 0x%x\n", wpa_auth);
     cyw43_set_ioctl_u32(self, WLC_SET_WPA_AUTH, wpa_auth, WWD_STA_INTERFACE);
 
     // allow relevant events through:
@@ -2280,7 +2280,13 @@ int cyw43_ll_wifi_ap_get_stas(cyw43_ll_t *self_in, int *num_stas, uint8_t *macs)
     memcpy(buf, "maxassoc\x00", 9);
     cyw43_put_le32(buf + 9, WWD_AP_INTERFACE);
     cyw43_do_ioctl(self, SDPCM_GET, WLC_GET_VAR, 9 + 4, buf, WWD_STA_INTERFACE);
+    int err = cyw43_do_ioctl(self, SDPCM_GET, WLC_GET_VAR, 9 + 4, buf, WWD_STA_INTERFACE);
+    if (err != 0) {
+        return err;
+    }
     uint32_t maxassoc = cyw43_get_le32(buf);
+    uint32_t max_macs_buf = (sizeof(self->spid_buf) - SDPCM_HEADER_LEN - 16 - 4) / 6;
+    maxassoc = MIN(maxassoc, max_macs_buf);
 
     if (macs == NULL) {
         // Return just the maximum number of STAs
@@ -2288,11 +2294,17 @@ int cyw43_ll_wifi_ap_get_stas(cyw43_ll_t *self_in, int *num_stas, uint8_t *macs)
         return 0;
     }
 
+    // Make sure all MACs will fit in buffer; size specified in num_stas
+    maxassoc = MIN(maxassoc, (uint32_t)*num_stas);
+
     // Get associated STAs
     cyw43_put_le32(buf, maxassoc);
-    cyw43_do_ioctl(self, SDPCM_GET, WLC_GET_ASSOCLIST, 4 + maxassoc * 6, buf, WWD_AP_INTERFACE);
-
-    *num_stas = cyw43_get_le32(buf);
+    err = cyw43_do_ioctl(self, SDPCM_GET, WLC_GET_ASSOCLIST, 4 + maxassoc * 6, buf, WWD_AP_INTERFACE);
+    if (err != 0) {
+        return err;
+    }
+    uint32_t stas_connected = cyw43_get_le32(buf);
+    *num_stas = MIN(stas_connected, maxassoc);
     memcpy(macs, buf + 4, *num_stas * 6);
     return 0;
 }
@@ -2324,7 +2336,7 @@ int cyw43_ll_gpio_get(cyw43_ll_t *self_in, int gpio_n, bool *gpio_en) {
     }
 
     *gpio_en = (cyw43_get_le32(buf) & (1 << gpio_n)) ? true : false;
-    CYW43_VDEBUG("cyw43_get_gpio %d=%d\n", gpio_n, (int)gpio_en);
+    CYW43_VDEBUG("cyw43_get_gpio %d=%s\n", gpio_n, (gpio_en ? "true" : "false"));
     return 0;
 }
 

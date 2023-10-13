@@ -19,19 +19,21 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
 
+#include "hardware/gpio.h"
 #include "picowi/picowi_pio.h"
 #include "picowi/picowi_pico.h"
 
 #define WHD_BUS_SPI_BACKPLANE_READ_PADD_SIZE        (4)
 
 #if CYW43_SPI_PIO
-#define WL_REG_ON 23
-#define DATA_OUT_PIN 24u
-#define DATA_IN_PIN 24u
-#define IRQ_PIN 24u
-// #define MONITOR_PIN 3u
-#define CLOCK_PIN 29u
-#define CS_PIN 25u
+#define WL_REG_ON CYW43_PIN_WL_REG_ON
+#define DATA_OUT_PIN CYW43_PIN_WL_CMD
+#define DATA_IN_PIN CYW43_PIN_WL_CMD
+#define IRQ_PIN CYW43_PIN_WL_CMD
+
+#define CLOCK_PIN CYW43_PIN_WL_CLOCK
+#define CS_PIN CYW43_PIN_WL_CS
+
 #define IRQ_SAMPLE_DELAY_NS 100
 
 #define CLOCK_DIV 2
@@ -208,6 +210,7 @@ int cyw43_spi_transfer(cyw43_int_t *self, const uint8_t *tx, size_t tx_length, u
 // Initialise our gpios
 void cyw43_spi_gpio_setup(void) {
   return;
+#if 0
   printf("cyw43_spi_gpio_setup()\n");
 
     // Setup WL_REG_ON (23)
@@ -224,11 +227,13 @@ void cyw43_spi_gpio_setup(void) {
     gpio_init(DATA_OUT_PIN);
     gpio_set_dir(DATA_OUT_PIN, GPIO_OUT);
     gpio_put(DATA_OUT_PIN, false);
+#endif
 }
 
 // Reset wifi chip
 void cyw43_spi_reset(void) {
   return;
+#if 0
   printf("cyw43_spi_reset()\n");
     gpio_put(WL_REG_ON, false); // off
     k_busy_wait(20000);
@@ -238,6 +243,7 @@ void cyw43_spi_reset(void) {
     // Setup IRQ (24) - also used for DO, DI
     gpio_init(IRQ_PIN);
     gpio_set_dir(IRQ_PIN, GPIO_IN);
+#endif
 }
 
 static inline uint32_t make_cmd(bool write, bool inc, uint32_t fn, uint32_t addr, uint32_t sz) {

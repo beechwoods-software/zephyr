@@ -29,11 +29,17 @@
 extern bool enable_spi_packet_dumping;  
 #endif
 
-#include "pico.h"
-#include "hardware/gpio.h"
-//#include "pico/time.h"
+// This seems to be necessary to avoid some compliation issues
+#define static_assert(expr, msg...) BUILD_ASSERT((expr), "" msg)
+#define count_of(a) (sizeof(a)/sizeof((a)[0]))
+
+#include <stdlib.h>
 #include <zephyr/kernel.h>
+#include <zephyr/drivers/gpio.h>
 #include <time.h>
+#include <assert.h>
+
+static const struct device *rp2040_gpio = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,14 +51,12 @@ extern "C" {
   
 #define CYW43_GPIO 1
 
-//#define CYW43_LOGIC_DEBUG 0
-#define CYW43_LOGIC_DEBUG 1
+#define CYW43_LOGIC_DEBUG 0
 
 #define CYW43_USE_OTP_MAC 1
 
 #define CYW43_NO_NETUTILS 1
 
-//#define CYW43_IOCTL_TIMEOUT_US 1000000
 #define CYW43_IOCTL_TIMEOUT_US 10000000
 
 #define CYW43_USE_STATS 0
@@ -87,14 +91,14 @@ extern "C" {
 #endif
 
 // Note, these are negated, because cyw43_driver negates them before returning!
-#define CYW43_EPERM            (-PICO_ERROR_NOT_PERMITTED) // Operation not permitted
-#define CYW43_EIO              (-PICO_ERROR_IO) // I/O error
-#define CYW43_EINVAL           -5 // Invalid argument
-#define CYW43_ETIMEDOUT        (-PICO_ERROR_TIMEOUT) // Connection timed out
+#define CYW43_EPERM            (-EPERM) // Operation not permitted
+#define CYW43_EIO              (-EIO) // I/O error
+#define CYW43_EINVAL           (-EINVAL) // Invalid argument
+#define CYW43_ETIMEDOUT        (-ETIMEDOUT) // Connection timed out
 
 #define CYW43_NUM_GPIOS        CYW43_WL_GPIO_COUNT
 
-#define cyw43_hal_pin_obj_t uint
+#define cyw43_hal_pin_obj_t unsigned int
 
 // get the number of elements in a fixed-size array
 #define CYW43_ARRAY_SIZE(a) count_of(a)
@@ -108,34 +112,38 @@ static inline uint32_t cyw43_hal_ticks_ms(void) {
 }
 
 static inline int cyw43_hal_pin_read(cyw43_hal_pin_obj_t pin) {
-    return gpio_get(pin);
+  return gpio_pin_get(rp2040_gpio, pin);
 }
 
 static inline void cyw43_hal_pin_low(cyw43_hal_pin_obj_t pin) {
-    gpio_clr_mask(1 << pin);
+  gpio_port_clear_bits(rp2040_gpio, (1 << pin)); 
 }
 
 static inline void cyw43_hal_pin_high(cyw43_hal_pin_obj_t pin) {
-    gpio_set_mask(1 << pin);
+  gpio_port_set_bits(rp2040_gpio, (1 << pin)); 
 }
 
-#define CYW43_HAL_PIN_MODE_INPUT           (GPIO_IN)
-#define CYW43_HAL_PIN_MODE_OUTPUT          (GPIO_OUT)
+#define CYW43_HAL_PIN_MODE_INPUT           (GPIO_INPUT)
+#define CYW43_HAL_PIN_MODE_OUTPUT          (GPIO_OUTPUT)
 
 #define CYW43_HAL_PIN_PULL_NONE            (0)
 #define CYW43_HAL_PIN_PULL_UP              (1)
 #define CYW43_HAL_PIN_PULL_DOWN            (2)
 
-#define CYW43_PIN_WL_REG_ON 23
-#define CYW43_PIN_WL_HOST_WAKE 24  
+#define CYW43_PIN_WL_REG_ON 23u
+#define CYW43_PIN_WL_CMD 24u
+#define CYW43_PIN_WL_CLOCK 29u
+#define CYW43_PIN_WL_CS 25u
+#define CYW43_PIN_WL_HOST_WAKE CYW43_PIN_WL_CMD
+  
 #define CYW43_WL_GPIO_COUNT 3
   
 #define __uint16_t uint16_t
 
 static inline void cyw43_hal_pin_config(cyw43_hal_pin_obj_t pin, uint32_t mode, uint32_t pull, __unused uint32_t alt) {
     assert((mode == CYW43_HAL_PIN_MODE_INPUT || mode == CYW43_HAL_PIN_MODE_OUTPUT) && alt == 0);
-    gpio_set_dir(pin, mode);
-    gpio_set_pulls(pin, pull == CYW43_HAL_PIN_PULL_UP, pull == CYW43_HAL_PIN_PULL_DOWN);
+    assert(pull == CYW43_HAL_PIN_PULL_UP || pull == CYW43_HAL_PIN_PULL_DOWN || pull == CYW43_HAL_PIN_PULL_NONE);
+    gpio_pin_configure(rp2040_gpio, pin, mode | (pull==CYW43_HAL_PIN_PULL_UP ? GPIO_PULL_UP : GPIO_PULL_DOWN));
 }
 
 void cyw43_hal_get_mac(int idx, uint8_t buf[6]);

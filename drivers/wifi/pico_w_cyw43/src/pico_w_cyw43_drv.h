@@ -8,13 +8,7 @@
 #include <stdio.h>
 #include <zephyr/kernel_structs.h>
 #include <zephyr/drivers/gpio.h>
-
 #include <zephyr/net/wifi_mgmt.h>
-
-#include "pico_w_cyw43_offload.h"
-
-#define MAX_DATA_SIZE 1600
-#define PICOWCYW43_GPIO_INTERRUPT_PIN 24
 
 enum pico_w_cyw43_security_type {
 	PICOWCYW43_SEC_OPEN,
@@ -43,8 +37,6 @@ struct pico_w_cyw43_cfg {
     	struct gpio_dt_spec wl_on_gpio;
 };
 
-
-
 struct pico_w_cyw43_sta {
 	char ssid[WIFI_SSID_MAX_LEN + 1];
 	enum pico_w_cyw43_security_type security;
@@ -54,33 +46,27 @@ struct pico_w_cyw43_sta {
 	int rssi;
 };
 
-struct pico_w_cyw43_bus_ops;
-
-
-//TODO: check these for unnecessary/unused fields.
-struct pico_w_cyw43_dev {
+// TODO: should "_t" all of the other structure types.
+struct pico_w_cyw43_dev_t {
 	struct net_if *iface;
 	struct pico_w_cyw43_bus_ops *bus;
 	scan_result_cb_t scan_cb;
 	struct k_work_q work_q;
 	struct k_work request_work;
 	struct k_work_delayable status_work;
-	struct pico_w_cyw43_sta sta;
-	enum pico_w_cyw43_request req;
-	enum pico_w_cyw43_role role;
-	uint8_t mac[6];
+        struct pico_w_cyw43_sta sta;
+        enum pico_w_cyw43_request req;
+        enum pico_w_cyw43_role role;
         struct net_stats_wifi stats;
         uint8_t frame_buf[NET_ETH_MAX_FRAME_SIZE];
-	char buf[MAX_DATA_SIZE];
-	struct k_mutex mutex;
-	atomic_val_t mutex_owner;
+        struct k_mutex mutex;
+        atomic_val_t mutex_owner;
 	unsigned int mutex_depth;
-	void *bus_data;
-	struct pico_w_cyw43_off_socket socket[PICOWCYW43_OFFLOAD_MAX_SOCKETS];
+        struct k_sem event_sem;
 };
 
 
-static inline void pico_w_cyw43_lock(struct pico_w_cyw43_dev *pico_w_cyw43)
+static inline void pico_w_cyw43_lock(struct pico_w_cyw43_dev_t *pico_w_cyw43)
 {
 	/* Nested locking */
 	if (atomic_get(&pico_w_cyw43->mutex_owner) != (atomic_t)(uintptr_t)_current) {
@@ -92,7 +78,7 @@ static inline void pico_w_cyw43_lock(struct pico_w_cyw43_dev *pico_w_cyw43)
 	}
 }
 
-static inline void pico_w_cyw43_unlock(struct pico_w_cyw43_dev *pico_w_cyw43)
+static inline void pico_w_cyw43_unlock(struct pico_w_cyw43_dev_t *pico_w_cyw43)
 {
 	if (!--pico_w_cyw43->mutex_depth) {
 		atomic_set(&pico_w_cyw43->mutex_owner, -1);
@@ -101,7 +87,7 @@ static inline void pico_w_cyw43_unlock(struct pico_w_cyw43_dev *pico_w_cyw43)
 }
 
 #if defined(CONFIG_WIFI_RPIPICOWCYW43_SHELL)
-void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev *dev);
+void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev_t *dev);
 #else
 #define pico_w_cyw43_shell_register(dev)
 #endif

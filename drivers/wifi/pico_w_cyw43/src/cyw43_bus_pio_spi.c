@@ -21,13 +21,14 @@
 #define DT_DRV_COMPAT infineon_cyw43
 
 #if CYW43_SPI_PIO
-#define WL_REG_ON 23
-#define DATA_OUT_PIN 24u
-#define DATA_IN_PIN 24u
-#define IRQ_PIN 24u
-// #define MONITOR_PIN 3u
-#define CLOCK_PIN 29u
-#define CS_PIN 25u
+#define WL_REG_ON CYW43_PIN_WL_REG_ON
+#define DATA_OUT_PIN CYW43_PIN_WL_CMD
+#define DATA_IN_PIN CYW43_PIN_WL_CMD
+#define IRQ_PIN CYW43_PIN_WL_CMD
+
+#define CLOCK_PIN CYW43_PIN_WL_CLOCK
+#define CS_PIN CYW43_PIN_WL_CS
+
 #define IRQ_SAMPLE_DELAY_NS 100
 
 #define CLOCK_DIV 2
