@@ -6,10 +6,13 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell.h>
+#include <zephyr/drivers/led.h>
 
 #include "pico_w_cyw43_drv.h"
 
 static struct pico_w_cyw43_dev_t *pico_w_cyw43;
+const struct device *const led_device =  DEVICE_DT_GET_ANY(infineon_cyw43_led);
+
 
 #if defined(CONFIG_WIFI_RPIPICOWCYW43_SHELL)
 void pico_w_cyw43_shell_register(struct pico_w_cyw43_dev_t *dev)
@@ -35,21 +38,19 @@ static int pico_w_cyw43_shell_led(const struct shell *sh, size_t argc,
 	  return -ENOEXEC;
 	}
 
-	pico_w_cyw43_lock(pico_w_cyw43);
-
 	if (!strcmp(argv[1], "on")) {
 	  shell_print(sh, "Enabling LED");
+	  led_on(led_device, 0);
 	} 
 	else if (!strcmp(argv[1], "off")) {
 	  shell_print(sh, "Disabling LED");
+	  led_off(led_device, 0);
 	}
 	else {
 	  shell_help(sh);
 	  return -ENOEXEC;
 	}
 	
-	pico_w_cyw43_unlock(pico_w_cyw43);
-
 	return 0;
 }
 
