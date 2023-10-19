@@ -51,19 +51,37 @@ static int gpio_rpi_port_set_masked_raw(const struct device *port, uint32_t mask
 static int gpio_rpi_port_set_bits_raw(const struct device *port, uint32_t pins)
 {
     printf("gpio_rpi_port_set_bits_raw pins=%x\n", pins);
+    int ret = 0;
     for (int i = 0; i < NUM_BANK0_GPIOS; i++) {
-        if (pins & (1<<i)) cyw43_gpio_set(&cyw43_state, i, 1);
+        if (pins & (1<<i)) {
+            if (i < CYW43_WL_GPIO_COUNT) {
+                printf("Setting pin %d to 1\n", i);
+                ret = cyw43_gpio_set(&cyw43_state, i, 1);
+            } else {
+                printf("pin %d is not supported in cyw43\n", i);
+                return -ENOTSUP;
+            }
+        }
     }
-	return 0;
+	return ret;
 }
 
 static int gpio_rpi_port_clear_bits_raw(const struct device *port, uint32_t pins)
 {
     printf("gpio_rpi_port_clear_bits_raw pins=%x\n", pins);
+    int ret = 0;
     for (int i = 0; i < NUM_BANK0_GPIOS; i++) {
-        if (pins & (1<<i)) cyw43_gpio_set(&cyw43_state, i, 0);
+        if (pins & (1<<i)) {
+            if (i < CYW43_WL_GPIO_COUNT) {
+                printf("Clearing pin %d\n", i);
+                ret = cyw43_gpio_set(&cyw43_state, i, 0);
+            } else {
+                printf("pin %d is not supported in cyw43\n", i);
+                return -ENOTSUP;
+            }
+        }
     }
-	return 0;
+	return ret;
 }
 
 static int gpio_rpi_port_toggle_bits(const struct device *port, uint32_t pins)
