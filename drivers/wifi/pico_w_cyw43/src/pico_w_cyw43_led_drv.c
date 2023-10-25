@@ -16,14 +16,14 @@
 
 static int cyw43_led_on(const struct device *dev, uint32_t led)
 {
-    cyw43_gpio_set(&cyw43_state, 0, true);
-    return 0;
+    if (led == 0) return cyw43_gpio_set(&cyw43_state, 0, true);
+    return -ENOTSUP;
 }
 
 static int cyw43_led_off(const struct device *dev, uint32_t led)
 {
-    cyw43_gpio_set(&cyw43_state, 0, false);
-    return 0;
+    if (led == 0) return cyw43_gpio_set(&cyw43_state, 0, false);
+    return -ENOTSUP;
 }
 
 static int cyw43_led_init(const struct device *dev)

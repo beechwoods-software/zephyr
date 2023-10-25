@@ -22,7 +22,7 @@ int main(void)
     }
     else {
         printf("led_off\n");
-        led_off(led_dev, 1);
+        led_off(led_dev, 0);
     }
     sleep(2);
     i++;
