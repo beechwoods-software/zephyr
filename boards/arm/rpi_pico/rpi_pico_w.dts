@@ -10,7 +10,7 @@
 
 &pinctrl {
 	pio0_spi0_default: pio0_spi0_default {
-	        /* gpio 25 is used for chip select, not assigned to the PIO */
+	    /* gpio 25 is used for chip select, not assigned to the PIO */
 		group1 {
 			pinmux = <PIO0_P29>, <PIO0_P23>;
 		};
@@ -30,7 +30,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		clocks = < &system_clk >;
-        	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+    	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
 		clk-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 		sio-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
 		pico_w_cyw43: pico_w_cyw43@0 {
@@ -41,10 +41,10 @@
 			host-wake-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;	
 
 			cyw43_led: cyw43_led {		/* Pico W LED is on CYW43439 GPIO 0 */
-		        	compatible = "infineon,cyw43_led";
-            		};
-            		cyw43_gpio: cyw43_gpio {
-		        	compatible = "infineon,cyw43_gpio";
+				compatible = "infineon,cyw43_led";
+			};
+			cyw43_gpio: cyw43_gpio {
+				compatible = "infineon,cyw43_gpio";
 			};
 		};
 	};

@@ -15,29 +15,48 @@ int main(void)
   if (NULL == gpio_dev) printf("NULL gpio_dev\n");
   else printf("+++ gpio_dev\n");
   int i = 0;
-  while (i < 10)
-  {
-    if (i % 2 == 0) {
-        printf("led_on\n");
-        // led_on(gpio_dev, 0);
-        gpio_pin_set(gpio_dev, 0, 1);
-    }
-    else {
-        printf("led_off\n");
-        // led_off(gpio_dev, 1);
-        gpio_pin_set(gpio_dev, 0, 0);
-    }
-    sleep(2);
-    i++;
-  }
-  printf("Setting pin 1, return value is: %d\n", gpio_pin_set(gpio_dev, 1, 1));
-  printf("Setting pin 2, return value is: %d\n", gpio_pin_set(gpio_dev, 2, 1));
-  printf("Setting pin 3, return value is: %d\n", gpio_pin_set(gpio_dev, 3, 1));
-  gpio_port_value_t value;
-  printf("+++ gpio_port_get\n");
+  gpio_port_value_t value = 0;
+  gpio_port_clear_bits(gpio_dev, 7);
   gpio_port_get(gpio_dev, &value);
-  printf("+++ gpio_port_set_masked_raw\n");
-  gpio_port_set_masked_raw(gpio_dev, 0xf, 1);
-  printf("++++ DONE!\n");
+  printf("+++ gpio_port_get -> 0x%x\n", value);
+  gpio_port_get_raw(gpio_dev, &value);
+  printf("+++ gpio_port_get_raw -> 0x%x\n\n", value);
+
+  printf("+++ Setting pin 0\n");
+  gpio_pin_set(gpio_dev, 0, 1);
+  gpio_port_get(gpio_dev, &value);
+  printf("+++ gpio_port_get -> 0x%x\n", value);
+  gpio_port_get_raw(gpio_dev, &value);
+  printf("+++ gpio_port_get_raw -> 0x%x\n\n", value);
+
+  printf("+++ Setting pin 1\n");
+  gpio_pin_set(gpio_dev, 1, 1);
+  gpio_port_get(gpio_dev, &value);
+  printf("+++ gpio_port_get -> 0x%x\n", value);
+  gpio_port_get_raw(gpio_dev, &value);
+  printf("+++ gpio_port_get_raw -> 0x%x\n\n", value);
+
+  printf("+++ Setting pin 2\n");
+  gpio_pin_set(gpio_dev, 2, 1);
+  gpio_port_get(gpio_dev, &value);
+  printf("+++ gpio_port_get -> 0x%x\n", value);
+  gpio_port_get_raw(gpio_dev, &value);
+  printf("+++ gpio_port_get_raw -> 0x%x\n\n", value);
+
+  printf("+++ Setting pin 3\n");
+  gpio_pin_set(gpio_dev, 3, 1);
+  gpio_port_get(gpio_dev, &value);
+  printf("+++ gpio_port_get -> 0x%x\n", value);
+  gpio_port_get_raw(gpio_dev, &value);
+  printf("+++ gpio_port_get_raw -> 0x%x\n\n", value);
+
+  printf("+++ gpio_port_set_masked_raw(gpio_dev, 0xf, 0);\n");
+  gpio_port_set_masked_raw(gpio_dev, 0xf, 0);
+  gpio_port_get(gpio_dev, &value);
+  printf("+++ gpio_port_get -> 0x%x\n", value);
+  gpio_port_get_raw(gpio_dev, &value);
+  printf("+++ gpio_port_get_raw -> 0x%x\n\n", value);
+
+  printf("++ DONE!\n");
   return 0;
 }

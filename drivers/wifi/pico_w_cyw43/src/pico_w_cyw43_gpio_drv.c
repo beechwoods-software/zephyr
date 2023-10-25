@@ -25,26 +25,56 @@ struct gpio_rpi_config {
 	struct gpio_driver_config common;
 };
 
+static const struct gpio_rpi_config _config = {
+    .common = { .port_pin_mask = 0, }
+};
+
 struct gpio_rpi_data {
     struct gpio_driver_config common;
 };
 
+static const struct gpio_rpi_data _data = {
+    .common = { .port_pin_mask = 0, }
+};
 static int gpio_rpi_configure(const struct device *dev, gpio_pin_t pin, gpio_flags_t flags)
 {
     printf("gpio_rpi_configure pin=%d flags=%x\n", pin, flags);
 	return 0;
 }
 
-
 static int gpio_rpi_port_get_raw(const struct device *dev, uint32_t *value)
 {
-    printf("gpio_rpi_port_get_raw\n");
-	return 0;
+    // printf("gpio_rpi_port_get_raw *value=%d\n", *value);
+    int ret = 0;
+    *value = 0;
+    for (int pin = 0; pin < CYW43_WL_GPIO_COUNT; pin++) {
+        bool val;
+        ret = cyw43_gpio_get(&cyw43_state, pin, &val);    
+        if (ret != 0) {
+            printf("Error from cyw43_gpio_get on pin %d: %d\n", pin, ret);
+        }
+        if (val) {
+            *value |= (1<<pin);
+            // printf("*%d:%x value is %d\n", pin, (1<<pin), *value);
+        }
+    }
+	return ret;
 }
 
 static int gpio_rpi_port_set_masked_raw(const struct device *port, uint32_t mask, uint32_t value)
 {
+    int ret = 0;
     printf("gpio_rpi_port_set_masked_raw mask=%x value=%d\n", mask, value);
+    for (int pin = 0; pin < NUM_BANK0_GPIOS; pin++) {
+        if (pin < CYW43_WL_GPIO_COUNT) {
+            if (mask & (1<<pin)) {
+                ret = cyw43_gpio_set(&cyw43_state, pin, value);
+            }
+        } else {
+            printf("pin %d is not supported in cyw43\n", pin);
+            return -ENOTSUP;
+        }
+    }
 	return 0;
 }
 
@@ -55,7 +85,7 @@ static int gpio_rpi_port_set_bits_raw(const struct device *port, uint32_t pins)
     for (int i = 0; i < NUM_BANK0_GPIOS; i++) {
         if (pins & (1<<i)) {
             if (i < CYW43_WL_GPIO_COUNT) {
-                printf("Setting pin %d to 1\n", i);
+                // printf("Setting pin %d to 1\n", i);
                 ret = cyw43_gpio_set(&cyw43_state, i, 1);
             } else {
                 printf("pin %d is not supported in cyw43\n", i);
@@ -124,10 +154,11 @@ static const struct gpio_driver_api cyw43_gpio_api = {
 
 static int cyw43_gpio_init(const struct device *dev)
 {
-    printf("gpio_rpi_init\n");
+    const struct gpio_rpi_config *config = dev->config;
+    const struct gpio_rpi_data *data = dev->data;
 	return 0;
 }
 
-DEVICE_DT_INST_DEFINE(0, cyw43_gpio_init, NULL, NULL,
-              NULL, POST_KERNEL, CONFIG_LED_INIT_PRIORITY,
+DEVICE_DT_INST_DEFINE(0, cyw43_gpio_init, NULL, &_data,
+              &_config, POST_KERNEL, CONFIG_LED_INIT_PRIORITY,
               &cyw43_gpio_api);
