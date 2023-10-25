@@ -6,6 +6,7 @@
 
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
+#include <zephyr/net/wifi.h>
 #include <zephyr/drivers/spi.h>
 
 #include "pico_w_cyw43_drv.h"
@@ -88,11 +89,10 @@ static int process_cyw43_scan_result(void *env, const cyw43_ev_scan_result_t *re
 	zephyr_scan_result.rssi = result->rssi;
 	zephyr_scan_result.mac_length = WIFI_MAC_ADDR_LEN;
 	memcpy(zephyr_scan_result.mac, result->bssid, WIFI_MAC_ADDR_LEN);
-	zephyr_scan_result.security = (result->auth_mode == CYW43_AUTH_OPEN ? WIFI_SECURITY_TYPE_NONE :
-				       (result->auth_mode == CYW43_AUTH_WPA_TKIP_PSK ? WIFI_SECURITY_TYPE_WPA_PSK :
-					(result->auth_mode == CYW43_AUTH_WPA2_AES_PSK ? WIFI_SECURITY_TYPE_PSK :
-					 (result->auth_mode == CYW43_AUTH_WPA2_MIXED_PSK ? WIFI_SECURITY_TYPE_PSK :
-					  WIFI_SECURITY_TYPE_UNKNOWN))));
+
+	// Had to reverse engineer the bit trickery below by looking at cyw43_ll_wifi_parse_scan_result()
+	zephyr_scan_result.security = CYW43_SECURITY_TO_ZEPHYR_SECURITY(((result->auth_mode | 0x00400000) & 0xFFFFFFFE));
+	
 	LOG_DBG("Finished setting up zephyr_scan_result\n");
 		
 	pico_w_cyw43_lock(pico_w_cyw43);
@@ -103,12 +103,12 @@ static int process_cyw43_scan_result(void *env, const cyw43_ev_scan_result_t *re
     return 0;
 }
 
-static void pico_w_cyw43_scan(struct pico_w_cyw43_dev_t *pico_w_cyw43_dev, bool active)
+static int pico_w_cyw43_scan(struct pico_w_cyw43_dev_t *pico_w_cyw43_dev, bool active)
 {	
 
   	LOG_DBG("Scannings (%s).\n", active ? "active" : "passive");
 	
-	int err;
+	int err=0;
 	static cyw43_wifi_scan_options_t scan_options;
 
 
@@ -123,10 +123,12 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev_t *pico_w_cyw43_dev, bool 
 	    LOG_DBG("Performing wifi scan");
 	  } else {
 	    LOG_ERR("Failed to start scan: %d", err);
+	    goto error;
 	  }
 	}
 	else {
 	  LOG_DBG("Wifi_scan already active.");
+	  goto error;
 	}
 	
 	for (int i=0; i<50; i++) {
@@ -141,17 +143,63 @@ static void pico_w_cyw43_scan(struct pico_w_cyw43_dev_t *pico_w_cyw43_dev, bool 
 	pico_w_cyw43_lock(pico_w_cyw43);
 	pico_w_cyw43->scan_cb(pico_w_cyw43->iface, 0, NULL);
 	pico_w_cyw43_unlock(pico_w_cyw43);
+
+ error:
+	return err;
 }
 
 
 static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
 
-	LOG_DBG("Connecting to %s (pass=%s)\n", pico_w_cyw43_device->sta.ssid, pico_w_cyw43_device->sta.pass);
+        const uint8_t *cyw43_ssid = (const uint8_t *)pico_w_cyw43_device->connect_params.ssid;
+	const uint8_t *cyw43_key = (const uint8_t *)pico_w_cyw43_device->connect_params.psk;
+	
+	LOG_DBG("Connecting to %s (pass=%s)\n", cyw43_ssid, cyw43_key);
 
-	const uint8_t *ssid = (const uint8_t *)pico_w_cyw43_device->sta.ssid;
-	const uint8_t *pass = (const uint8_t *)pico_w_cyw43_device->sta.pass;
+	uint32_t cyw43_auth_type;
+	uint32_t cyw43_channel;
+	uint32_t cyw43_ssid_len;
+	uint32_t cyw43_key_len;
+	const uint8_t *cyw43_bssid = NULL;
+	
+	switch (pico_w_cyw43_device->connect_params.security) {
+	case WIFI_SECURITY_TYPE_NONE:
+	  cyw43_ssid_len = 0;
+	  cyw43_key_len = 0;
+	  cyw43_auth_type = CYW43_AUTH_OPEN;
+	  cyw43_channel = CYW43_CHANNEL_NONE; 
+	  break;
+	case WIFI_SECURITY_TYPE_WPA_PSK: //WPA-PSK security
+	  cyw43_ssid_len = strlen(cyw43_ssid);
+	  cyw43_key_len = strlen(cyw43_key);
+	  cyw43_auth_type = CYW43_AUTH_WPA_TKIP_PSK;
+	  cyw43_channel = (pico_w_cyw43_device->connect_params.channel == 0
+			   ? CYW43_CHANNEL_NONE
+			   : pico_w_cyw43_device->connect_params.channel); 
+	  break;
+	case WIFI_SECURITY_TYPE_PSK: //WPA2-PSK security
+	  cyw43_ssid_len = strlen(cyw43_ssid);
+	  cyw43_key_len = strlen(cyw43_key);
+	  cyw43_auth_type = CYW43_AUTH_WPA2_AES_PSK;
+	  cyw43_channel = (pico_w_cyw43_device->connect_params.channel == 0
+			   ? CYW43_CHANNEL_NONE
+			   : pico_w_cyw43_device->connect_params.channel); 
+	  break;
+	default:
+	  cyw43_ssid_len = 0;
+	  cyw43_key_len = 0;
+	  cyw43_auth_type = CYW43_AUTH_OPEN;
+	  cyw43_channel = CYW43_CHANNEL_NONE; 
+	  break;
+	  
+	}
 
+	LOG_DBG(" calling cyw43_wifi_join() with cyw43_ssid_len=%d, cyw43_ssid=%s, cyw43_key_len=%d,\n"
+		"cyw43_key=%s, cyw43_auth_type=%d, cyw43_channel=%d\n",
+		cyw43_ssid_len, cyw43_ssid, cyw43_key_len,
+		cyw43_key, cyw43_auth_type, cyw43_channel);
+	
 	int rv;
 
 	// This looks unbelievably goofy, but the comments in cyw43.h say:
@@ -159,21 +207,23 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
         //    to query the status of the link. It can take a many seconds to connect to fully join a network."
 	for (int i=0; i<5; i++) {
 	  rv = 0;
-	  if (cyw43_wifi_join(&cyw43_state, strlen(ssid), (const uint8_t *)ssid, pass ? strlen(pass) : 0, (const uint8_t *)pass, CYW43_AUTH_WPA2_AES_PSK, NULL, CYW43_CHANNEL_NONE)) {
+	  if (cyw43_wifi_join(&cyw43_state, cyw43_ssid_len, cyw43_ssid, cyw43_key_len, cyw43_key, cyw43_auth_type, cyw43_bssid, cyw43_channel)) {
 	    LOG_ERR("failed to connect.\n");
 	    continue;
 	  } 
 
+	  
 	  // In my experience, full connection was always achieved before 4 seconds (j==8), but
 	  // increasing it may ben necessary on some wifi networks. Unfortunately increasing it
 	  // also raises the /minimum/ connection time.
 	  for (int j=0; j<8; j++) {
 	    int link_status=cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
-	    //printf("**** link_status=%d ****\n", link_status);
+
 	    if (link_status != CYW43_LINK_JOIN) {
 	      rv = 1;
 	      break;
 	    }
+
 	    k_sleep(K_MSEC(500));
 	  }
 	  if (rv == 0) {
@@ -192,13 +242,13 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 	  LOG_DBG("pico_w_cyw43_connect connected.\n");
 	}
 	
-	LOG_DBG("Done Connecting to %s (pass=%s)\n", pico_w_cyw43_device->sta.ssid, pico_w_cyw43_device->sta.pass);
+	//LOG_DBG("Done Connecting to %s (pass=%s)\n", pico_w_cyw43_device->sta.ssid, pico_w_cyw43_device->sta.pass);
 	return rv;
 }
 
 static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
-	LOG_DBG("Disconnecting from %s", pico_w_cyw43_device->sta.ssid);
+  //LOG_DBG("Disconnecting from %s", pico_w_cyw43_device->sta.ssid);
 
 	pico_w_cyw43_lock(pico_w_cyw43_device);
 	cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA); 
@@ -215,7 +265,85 @@ error:
 	return -EIO;
 }
 
+static int pico_w_cyw43_enable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
+{
+  int rv=0;
 
+  const uint8_t *cyw43_ssid = (const uint8_t *)pico_w_cyw43_device->ap_params.ssid;
+  const uint8_t *cyw43_password = (const uint8_t *)pico_w_cyw43_device->ap_params.psk;
+
+  uint32_t cyw43_auth;
+  uint32_t cyw43_channel;
+  uint32_t cyw43_ssid_len;
+  uint32_t cyw43_password_len;
+
+	switch (pico_w_cyw43_device->connect_params.security) {
+	case WIFI_SECURITY_TYPE_NONE:
+	  cyw43_ssid_len = 0;
+	  cyw43_password_len = 0;
+	  cyw43_auth = CYW43_AUTH_OPEN;
+	  cyw43_channel = CYW43_CHANNEL_NONE; 
+	  break;
+	case WIFI_SECURITY_TYPE_WPA_PSK: //WPA-PSK security
+	  cyw43_ssid_len = strlen(cyw43_ssid);
+	  cyw43_password_len = strlen(cyw43_password);
+	  cyw43_auth = CYW43_AUTH_WPA_TKIP_PSK;
+	  cyw43_channel = (pico_w_cyw43_device->ap_params.channel == 0
+			   ? CYW43_CHANNEL_NONE
+			   : pico_w_cyw43_device->ap_params.channel); 
+	  break;
+	case WIFI_SECURITY_TYPE_PSK: //WPA2-PSK security
+	  cyw43_ssid_len = strlen(cyw43_ssid);
+	  cyw43_password_len = strlen(cyw43_password);
+	  cyw43_auth = CYW43_AUTH_WPA2_AES_PSK;
+	  cyw43_channel = (pico_w_cyw43_device->ap_params.channel == 0
+			   ? CYW43_CHANNEL_NONE
+			   : pico_w_cyw43_device->ap_params.channel); 
+	  break;
+	default:
+	  cyw43_ssid_len = 0;
+	  cyw43_password_len = 0;
+	  cyw43_auth = CYW43_AUTH_OPEN;
+	  cyw43_channel = CYW43_CHANNEL_NONE; 
+	  break;	  
+	}
+
+	LOG_DBG(" Setting up AP with: ssid_len=%d, ssid=%s, password_len=%d, password=%s\n"
+		"                     auth=%d, channel=%d\n",
+		cyw43_ssid_len, cyw43_ssid, cyw43_password_len, cyw43_password,
+		cyw43_auth, cyw43_channel);
+
+	cyw43_wifi_ap_set_ssid(&cyw43_state, cyw43_ssid_len, cyw43_ssid);
+	
+	if (cyw43_auth != CYW43_AUTH_OPEN) {
+	  cyw43_wifi_ap_set_password(&cyw43_state, cyw43_password_len, cyw43_password);
+	}
+
+	cyw43_wifi_ap_set_channel(&cyw43_state, cyw43_channel);
+	cyw43_wifi_ap_set_auth(&cyw43_state, cyw43_auth);	
+	
+	cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, true, CYW43_COUNTRY_WORLDWIDE);
+  
+        return rv;  
+}
+
+static int pico_w_cyw43_disable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
+{
+  int rv=0;
+
+  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, false, CYW43_COUNTRY_WORLDWIDE);
+
+  return rv;  
+}
+
+static int pico_w_cyw43_set_pm(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
+{
+  int rv=0;
+
+  rv = cyw43_wifi_pm(&cyw43_state, pico_w_cyw43_device->pm_params.pm_out);
+  
+  return rv;
+}
 
 static void pico_w_cyw43_request_work(struct k_work *item)
 {
@@ -236,11 +364,25 @@ static void pico_w_cyw43_request_work(struct k_work *item)
 		wifi_mgmt_raise_disconnect_result_event(pico_w_cyw43_device->iface, err);
 		break;
 	case PICOWCYW43_REQ_PASSIVE_SCAN:
-	        pico_w_cyw43_scan(pico_w_cyw43_device, false);
+	        err = pico_w_cyw43_scan(pico_w_cyw43_device, false);
+		if (err) { LOG_ERR("Scan request returned error %d\n", err); }
 		break;
 	case PICOWCYW43_REQ_ACTIVE_SCAN:
-	        pico_w_cyw43_scan(pico_w_cyw43_device, true);
+	        err = pico_w_cyw43_scan(pico_w_cyw43_device, true);
+		if (err) { LOG_ERR("Scan request returned error %d\n", err); }
 		break;
+	case PICOWCYW43_REQ_ENABLE_AP:
+		err = pico_w_cyw43_enable_ap(pico_w_cyw43_device);
+		if (err) { LOG_ERR("Enable AP returned error %d\n", err); }
+		break;
+	case PICOWCYW43_REQ_DISABLE_AP:
+		err = pico_w_cyw43_disable_ap(pico_w_cyw43_device);
+		if (err) { LOG_ERR("Disable AP returned error %d\n", err); }
+		break;
+	case PICOWCYW43_REQ_SET_PM:
+	        err = pico_w_cyw43_set_pm(pico_w_cyw43_device);
+		if (err) { LOG_ERR("Set PM returned error %d\n", err); }
+	        break;	
 	case PICOWCYW43_REQ_NONE:	
 	default:
 		break;
@@ -311,7 +453,15 @@ int pico_w_cyw43_iface_status(const struct device *dev,
 {
   LOG_DBG("Calling iface_status()\n");
 
-  int link_status=cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+  struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
+  
+  status->iface_mode = (((cyw43_state.itf_state >> CYW43_ITF_AP) & 1) ? WIFI_MODE_AP : WIFI_MODE_INFRA);
+
+  //TODO: look harder to see if there's a way to actually retrieve this... until then,
+  // hard code to 802.11n
+  status->link_mode = WIFI_4;
+    
+  int link_status=cyw43_wifi_link_status(&cyw43_state, (status->iface_mode == WIFI_MODE_AP) ? CYW43_ITF_AP : CYW43_ITF_STA);
   switch (link_status) {
   case CYW43_LINK_JOIN:
     status->state = WIFI_STATE_COMPLETED;
@@ -325,15 +475,29 @@ int pico_w_cyw43_iface_status(const struct device *dev,
 
   cyw43_wifi_get_bssid(&cyw43_state, (char *) &(status->bssid[0]));
 
-  int rssi;
-  cyw43_wifi_get_rssi(&cyw43_state, (int *) &rssi);
-  status->rssi = rssi;
-  
-  strcpy(status->ssid, (status->state == WIFI_STATE_COMPLETED ? pico_w_cyw43->sta.ssid : ""));
-  status->ssid_len = strlen(pico_w_cyw43->sta.ssid);
+  status->band = WIFI_FREQ_BAND_2_4_GHZ;
 
-  //Because right nbow, we're hard coded to CYW43_AUTH_WPA2_AES_PSK
-  status->security = (status->state ==WIFI_STATE_COMPLETED ? WIFI_SECURITY_TYPE_PSK : WIFI_SECURITY_TYPE_NONE);
+  cyw43_ioctl(&cyw43_state, CYW43_IOCTL_GET_CHANNEL, sizeof(status->channel),
+	      (uint8_t *)&status->channel, CYW43_ITF_STA); 
+  
+  cyw43_wifi_get_rssi(&cyw43_state, (int32_t *) &(status->rssi));
+
+  strcpy(status->ssid, (status->state == WIFI_STATE_COMPLETED ? pico_w_cyw43_device->connect_params.ssid : ""));
+  status->ssid_len = strlen(pico_w_cyw43_device->connect_params.ssid);
+  
+  status->security = pico_w_cyw43_device->connect_params.security;
+
+  if (!cyw43_wifi_get_pm(&cyw43_state, &(pico_w_cyw43_device->pm_params.pm_in))) {
+    if ((pico_w_cyw43_device->pm_params.pm_in & 0x0000000f) != CYW43_NO_POWERSAVE_MODE) {
+      status->beacon_interval = (pico_w_cyw43_device->pm_params.pm_in & 0x0000F000) >> 12;
+      status->dtim_period = (pico_w_cyw43_device->pm_params.pm_in & 0x000F0000) >> 16;
+    }
+  }
+  else {
+    LOG_ERR("cyw43_wifi_get_pm() returned error.\n"); 
+  }
+  
+  status->twt_capable = false;
   
   return 0;
 }
@@ -352,8 +516,8 @@ static int pico_w_cyw43_mgmt_scan(const struct device *dev,
   pico_w_cyw43_device->scan_cb = cb;
 
   pico_w_cyw43_device->req = (params->scan_type == WIFI_SCAN_TYPE_ACTIVE ?
-		       PICOWCYW43_REQ_ACTIVE_SCAN :
-		       PICOWCYW43_REQ_PASSIVE_SCAN);
+			      PICOWCYW43_REQ_ACTIVE_SCAN :
+			      PICOWCYW43_REQ_PASSIVE_SCAN);
 
   k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
   
@@ -362,47 +526,25 @@ static int pico_w_cyw43_mgmt_scan(const struct device *dev,
   return 0;
 }
 
-static int __pico_w_cyw43_dev_deconfig(struct pico_w_cyw43_dev_t *pico_w_cyw43_device,
-                                       struct wifi_connect_req_params *params)
-{
-    memcpy(pico_w_cyw43_device->sta.ssid, params->ssid, params->ssid_length);
-    pico_w_cyw43_device->sta.ssid[params->ssid_length] = '\0';
-
-    switch (params->security) {
-    case WIFI_SECURITY_TYPE_NONE:
-        pico_w_cyw43_device->sta.pass[0] = '\0';
-        pico_w_cyw43_device->sta.security = PICOWCYW43_SEC_OPEN;
-        break;
-    case WIFI_SECURITY_TYPE_PSK:
-        memcpy(pico_w_cyw43_device->sta.pass, params->psk, params->psk_length);
-        pico_w_cyw43_device->sta.pass[params->psk_length] = '\0';
-        pico_w_cyw43_device->sta.security = PICOWCYW43_SEC_WPA2_MIXED;
-        break;
-    default:
-        return -EINVAL;
-    }
-
-    if (params->channel == WIFI_CHANNEL_ANY) {
-        pico_w_cyw43_device->sta.channel = 0U;
-    } else {
-        pico_w_cyw43_device->sta.channel = params->channel;
-    }
-
-    return 0;
-}
-
 static int pico_w_cyw43_mgmt_connect(const struct device *dev,
 				     struct wifi_connect_req_params *params)
 {
   struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
-  int err;
   LOG_DBG("");
   pico_w_cyw43_lock(pico_w_cyw43_device);
-  err = __pico_w_cyw43_dev_deconfig(pico_w_cyw43_device, params);
-  if (!err) {
-    pico_w_cyw43_device->req = PICOWCYW43_REQ_CONNECT;
-    k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
-  }
+
+  // Copy the relevant parameters into our own structure, because there's no
+  // guarantee (that I can see anyway) that the original one will not be deallocated.
+  strncpy(pico_w_cyw43_device->connect_params.ssid, params->ssid, params->ssid_length);
+  pico_w_cyw43_device->connect_params.ssid[params->ssid_length] = '\0';
+  strncpy(pico_w_cyw43_device->connect_params.psk, params->psk, params->psk_length);
+  pico_w_cyw43_device->connect_params.psk[params->psk_length] = '\0';  
+  pico_w_cyw43_device->connect_params.security = params->security;
+  pico_w_cyw43_device->connect_params.channel = params->channel;
+    
+  pico_w_cyw43_device->req = PICOWCYW43_REQ_CONNECT;
+  k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
+
   pico_w_cyw43_unlock(pico_w_cyw43_device);
   return 0;
 }
@@ -428,13 +570,115 @@ static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
 
   pico_w_cyw43_lock(pico_w_cyw43_device);
 
+  strncpy(pico_w_cyw43_device->ap_params.ssid, params->ssid, params->ssid_length);
+  pico_w_cyw43_device->ap_params.ssid[params->ssid_length] = '\0';
+  strncpy(pico_w_cyw43_device->ap_params.psk, params->psk, params->psk_length);
+  pico_w_cyw43_device->ap_params.psk[params->psk_length] = '\0';  
+  pico_w_cyw43_device->ap_params.security = params->security;
+  pico_w_cyw43_device->ap_params.channel = params->channel;
+  
+  pico_w_cyw43_device->req = PICOWCYW43_REQ_ENABLE_AP;
+  k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
   pico_w_cyw43_unlock(pico_w_cyw43_device);
   return 0;    
 }
 
 static int pico_w_cyw43_mgmt_ap_disable(const struct device *dev)
 {
+  struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
+    
   LOG_DBG("Calling mgmt_ap_disable()\n");
+  pico_w_cyw43_lock(pico_w_cyw43_device);
+  pico_w_cyw43_device->req = PICOWCYW43_REQ_DISABLE_AP;
+  k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
+  pico_w_cyw43_unlock(pico_w_cyw43_device);
+  return 0;
+}
+
+static int pico_w_cyw43_mgmt_set_pm(const struct device *dev, struct wifi_ps_params *params)
+{
+  struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
+
+  uint8_t pm_mode;
+  uint16_t pm2_sleep_ret_ms = 0;
+  uint8_t li_beacon_period = 0;
+  uint8_t li_dtim_period = 0;
+  uint8_t li_assoc = 0;
+
+  LOG_DBG("");
+
+  if (params->type == WIFI_PS_PARAM_STATE) {
+    if (!params->enabled) {
+      pm_mode = CYW43_NO_POWERSAVE_MODE;
+    }
+    else {
+      if (CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_MODE == CYW43_NO_POWERSAVE_MODE) {
+	/* if we're dynamically going from off to on, then CYW43_PM2_POWERSAVE_MODE
+	   is the default. If you want to use CYW43_PM1_POWERSAVE_MODE, that has to be
+	   configured at build time with CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_MODE=1 */
+	pm_mode = CYW43_PM2_POWERSAVE_MODE;
+      }
+      else {
+	pm_mode = CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_MODE;
+      }
+    }
+    pm2_sleep_ret_ms = CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_PM2_SLEEP_RET_MS;
+    li_beacon_period = CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_LI_BEACON_PERIOD;
+    li_dtim_period = CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_LI_DTIM_PERIOD;
+    li_assoc = CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_LI_ASSOC;    	       
+  }
+  else {
+    printk("set_power_save only used for enable/disable feature in this driver. Parameters\n"
+	   "can be set using the CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_ build time\n"
+	   "parameters.\n");
+    return -1;
+  }
+  
+  LOG_DBG("setting pm_out = cyw43_pm_value(pm_mode=%d, pm2_sleep_ret_ms=%d, li_beacon_period=%d, li_dtim_period=%d, li_assoc=%d)\n",
+	  pm_mode, pm2_sleep_ret_ms, li_beacon_period, li_dtim_period, li_assoc);
+  pico_w_cyw43_lock(pico_w_cyw43_device);
+  pico_w_cyw43_device->pm_params.pm_out = cyw43_pm_value(pm_mode, pm2_sleep_ret_ms, li_beacon_period, li_dtim_period, li_assoc);
+
+  pico_w_cyw43_device->req = PICOWCYW43_REQ_SET_PM;
+  k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
+  pico_w_cyw43_unlock(pico_w_cyw43_device);
+  
+  return 0;
+}
+
+static int pico_w_cyw43_pm_status(const struct device *dev, struct wifi_ps_config *config)
+{
+  struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
+  LOG_DBG("");
+
+  uint8_t pm_mode;
+  uint16_t pm2_sleep_ret_ms = 0;
+  uint8_t li_beacon_period = 0;
+  uint8_t li_dtim_period = 0;
+  uint8_t li_assoc = 0;
+
+  pico_w_cyw43_lock(pico_w_cyw43_device);
+
+  if (!cyw43_wifi_get_pm(&cyw43_state, &(pico_w_cyw43_device->pm_params.pm_in))) {
+    LOG_DBG("pico_w_cyw43_device->pm_params.pm_in = %xu\n", pico_w_cyw43_device->pm_params.pm_in);
+    pm_mode = (uint8_t) (pico_w_cyw43_device->pm_params.pm_in & 0x0000000f);
+    pm2_sleep_ret_ms = (uint16_t) ((pico_w_cyw43_device->pm_params.pm_in & 0x00000ff0) >> 4);
+    li_beacon_period = (uint8_t) ((pico_w_cyw43_device->pm_params.pm_in & 0x00000ff0) >> 12);
+    li_dtim_period = (uint8_t) ((pico_w_cyw43_device->pm_params.pm_in & 0x00000ff0) >> 16);
+    li_assoc = (uint8_t) ((pico_w_cyw43_device->pm_params.pm_in & 0x00000ff0) >> 20);
+    
+    config->ps_params.enabled = (pm_mode == CYW43_NO_POWERSAVE_MODE ? false : true);
+    if (config->ps_params.enabled) {
+      config->ps_params.wakeup_mode = (li_dtim_period ? WIFI_PS_WAKEUP_MODE_DTIM : WIFI_PS_WAKEUP_MODE_LISTEN_INTERVAL);
+      config->ps_params.timeout_ms = pm2_sleep_ret_ms * 10;
+    }
+  }
+  else {
+    LOG_ERR("cyw43_wifi_get_pm() returned error.\n"); 
+  }
+  pico_w_cyw43_unlock(pico_w_cyw43_device);
+
+  
   return 0;
 }
 
@@ -670,6 +914,14 @@ static int pico_w_cyw43_init(const struct device *dev)
 
     cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
 
+    /* Set PM to our configurable parameters */
+    cyw43_wifi_pm(&cyw43_state,
+		  cyw43_pm_value(CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_MODE,
+				 CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_PM2_SLEEP_RET_MS,
+				 CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_LI_BEACON_PERIOD,
+				 CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_LI_DTIM_PERIOD,
+				 CONFIG_WIFI_RPIPICOWCYW43_POWERSAVE_LI_ASSOC));
+    
     return 0;
   
 }
@@ -683,7 +935,9 @@ static const struct wifi_mgmt_ops pico_w_cyw43_mgmt_api = {
 	.iface_status		   = pico_w_cyw43_iface_status,
 #if defined(CONFIG_NET_STATISTICS_WIFI)
 	.get_stats	           = pico_w_cyw43_wifi_stats,
-#endif	
+#endif
+	.set_power_save            = pico_w_cyw43_mgmt_set_pm,
+	.get_power_save_config     = pico_w_cyw43_pm_status,
 };
 
 static const struct net_wifi_mgmt_offload pico_w_cyw43_callbacks = {
