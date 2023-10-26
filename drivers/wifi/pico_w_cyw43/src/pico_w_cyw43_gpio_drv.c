@@ -33,7 +33,7 @@ struct gpio_rpi_data {
     struct gpio_driver_config common;
 };
 
-static const struct gpio_rpi_data _data = {
+static struct gpio_rpi_data rpi_data = {
     .common = { .port_pin_mask = 0, }
 };
 static int gpio_rpi_configure(const struct device *dev, gpio_pin_t pin, gpio_flags_t flags)
@@ -133,12 +133,6 @@ static int gpio_rpi_manage_callback(const struct device *port, struct gpio_callb
     return 0;
 }
 
-static int gpio_rpi_get_pending_int(const struct device *dev)
-{
-    printf("gpio_rpi_get_pending_int\n");
-    return 0;
-}
-
 static const struct gpio_driver_api cyw43_gpio_api = {
 	.pin_configure = gpio_rpi_configure,
 	.port_get_raw = gpio_rpi_port_get_raw,
@@ -148,17 +142,16 @@ static const struct gpio_driver_api cyw43_gpio_api = {
 	.port_toggle_bits = gpio_rpi_port_toggle_bits,
 	.pin_interrupt_configure = gpio_rpi_pin_interrupt_configure,
     .manage_callback = gpio_rpi_manage_callback,
-    .get_pending_int = gpio_rpi_get_pending_int,
 };
 
 
 static int cyw43_gpio_init(const struct device *dev)
 {
-    const struct gpio_rpi_config *config = dev->config;
-    const struct gpio_rpi_data *data = dev->data;
+    // const struct gpio_rpi_config *config = dev->config;
+    // const struct gpio_rpi_data *data = dev->data;
 	return 0;
 }
 
-DEVICE_DT_INST_DEFINE(0, cyw43_gpio_init, NULL, &_data,
+DEVICE_DT_INST_DEFINE(0, cyw43_gpio_init, NULL, &rpi_data,
               &_config, POST_KERNEL, CONFIG_LED_INIT_PRIORITY,
               &cyw43_gpio_api);
