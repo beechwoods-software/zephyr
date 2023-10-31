@@ -162,13 +162,16 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 	uint32_t cyw43_ssid_len;
 	uint32_t cyw43_key_len;
 	const uint8_t *cyw43_bssid = NULL;
-	
+
+	LOG_DBG("connect_params.security = %d\n", pico_w_cyw43_device->connect_params.security);
 	switch (pico_w_cyw43_device->connect_params.security) {
 	case WIFI_SECURITY_TYPE_NONE:
-	  cyw43_ssid_len = 0;
+	  cyw43_ssid_len = strlen(cyw43_ssid);;
 	  cyw43_key_len = 0;
 	  cyw43_auth_type = CYW43_AUTH_OPEN;
-	  cyw43_channel = CYW43_CHANNEL_NONE; 
+	  cyw43_channel = (pico_w_cyw43_device->connect_params.channel == 0
+			   ? CYW43_CHANNEL_NONE
+			   : pico_w_cyw43_device->connect_params.channel);
 	  break;
 	case WIFI_SECURITY_TYPE_WPA_PSK: //WPA-PSK security
 	  cyw43_ssid_len = strlen(cyw43_ssid);
@@ -207,11 +210,17 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
         //    to query the status of the link. It can take a many seconds to connect to fully join a network."
 	for (int i=0; i<5; i++) {
 	  rv = 0;
-	  if (cyw43_wifi_join(&cyw43_state, cyw43_ssid_len, cyw43_ssid, cyw43_key_len, cyw43_key, cyw43_auth_type, cyw43_bssid, cyw43_channel)) {
+
+	  pico_w_cyw43_lock(pico_w_cyw43_device);
+
+	  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
+	  
+	  rv = cyw43_wifi_join(&cyw43_state, cyw43_ssid_len, cyw43_ssid, cyw43_key_len, cyw43_key, cyw43_auth_type, cyw43_bssid, cyw43_channel);
+	  if (rv) {
 	    LOG_ERR("failed to connect.\n");
 	    continue;
 	  } 
-
+	  pico_w_cyw43_unlock(pico_w_cyw43_device);
 	  
 	  // In my experience, full connection was always achieved before 4 seconds (j==8), but
 	  // increasing it may ben necessary on some wifi networks. Unfortunately increasing it
@@ -237,6 +246,7 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 	else {
 	  pico_w_cyw43_lock(pico_w_cyw43_device);
 	  net_if_carrier_on(pico_w_cyw43_device->iface);
+	  wifi_mgmt_raise_connect_result_event(pico_w_cyw43_device->iface, rv);
 	  pico_w_cyw43_unlock(pico_w_cyw43_device);
 	  
 	  LOG_DBG("pico_w_cyw43_connect connected.\n");
@@ -248,17 +258,19 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 
 static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
-  //LOG_DBG("Disconnecting from %s", pico_w_cyw43_device->sta.ssid);
-
+        LOG_DBG("Disconnecting from %s", pico_w_cyw43_device->connect_params.ssid);
+	int rv;
 	pico_w_cyw43_lock(pico_w_cyw43_device);
-	cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA); 
-
-        if (false) { goto error; }
+	rv = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);	
+        if (rv) { goto error; }
+	cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, false, CYW43_COUNTRY_WORLDWIDE);
+	
 	LOG_DBG("Disconnected!");
 
 	net_if_carrier_off(pico_w_cyw43_device->iface);
+	wifi_mgmt_raise_disconnect_result_event(pico_w_cyw43_device->iface, rv);
 	pico_w_cyw43_unlock(pico_w_cyw43_device);
-	return 0;
+	return rv;
 
 error:
 	pico_w_cyw43_unlock(pico_w_cyw43_device);
@@ -267,22 +279,25 @@ error:
 
 static int pico_w_cyw43_enable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
-  int rv=0;
+        int rv=0;
 
-  const uint8_t *cyw43_ssid = (const uint8_t *)pico_w_cyw43_device->ap_params.ssid;
-  const uint8_t *cyw43_password = (const uint8_t *)pico_w_cyw43_device->ap_params.psk;
-
-  uint32_t cyw43_auth;
-  uint32_t cyw43_channel;
-  uint32_t cyw43_ssid_len;
-  uint32_t cyw43_password_len;
-
-	switch (pico_w_cyw43_device->connect_params.security) {
+        const uint8_t *cyw43_ssid = (const uint8_t *)pico_w_cyw43_device->ap_params.ssid;
+	const uint8_t *cyw43_password = (const uint8_t *)pico_w_cyw43_device->ap_params.psk;
+	 
+	uint32_t cyw43_auth;
+	uint32_t cyw43_channel;
+	uint32_t cyw43_ssid_len;
+	uint32_t cyw43_password_len;
+	
+	LOG_DBG("ap_params.security = %d\n", pico_w_cyw43_device->ap_params.security);
+	switch (pico_w_cyw43_device->ap_params.security) {
 	case WIFI_SECURITY_TYPE_NONE:
-	  cyw43_ssid_len = 0;
+	  cyw43_ssid_len = strlen(cyw43_ssid);
 	  cyw43_password_len = 0;
 	  cyw43_auth = CYW43_AUTH_OPEN;
-	  cyw43_channel = CYW43_CHANNEL_NONE; 
+	  cyw43_channel = (pico_w_cyw43_device->ap_params.channel == 0
+			   ? CYW43_CHANNEL_NONE
+			   : pico_w_cyw43_device->ap_params.channel); 
 	  break;
 	case WIFI_SECURITY_TYPE_WPA_PSK: //WPA-PSK security
 	  cyw43_ssid_len = strlen(cyw43_ssid);
@@ -313,6 +328,7 @@ static int pico_w_cyw43_enable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device
 		cyw43_ssid_len, cyw43_ssid, cyw43_password_len, cyw43_password,
 		cyw43_auth, cyw43_channel);
 
+	pico_w_cyw43_lock(pico_w_cyw43_device);
 	cyw43_wifi_ap_set_ssid(&cyw43_state, cyw43_ssid_len, cyw43_ssid);
 	
 	if (cyw43_auth != CYW43_AUTH_OPEN) {
@@ -323,25 +339,26 @@ static int pico_w_cyw43_enable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device
 	cyw43_wifi_ap_set_auth(&cyw43_state, cyw43_auth);	
 	
 	cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, true, CYW43_COUNTRY_WORLDWIDE);
-  
+	pico_w_cyw43_unlock(pico_w_cyw43_device);
         return rv;  
 }
 
 static int pico_w_cyw43_disable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
   int rv=0;
-
+  pico_w_cyw43_lock(pico_w_cyw43_device);
+  rv = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_AP); 
   cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, false, CYW43_COUNTRY_WORLDWIDE);
-
+  pico_w_cyw43_unlock(pico_w_cyw43_device);
   return rv;  
 }
 
 static int pico_w_cyw43_set_pm(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
   int rv=0;
-
+  pico_w_cyw43_lock(pico_w_cyw43_device);
   rv = cyw43_wifi_pm(&cyw43_state, pico_w_cyw43_device->pm_params.pm_out);
-  
+  pico_w_cyw43_unlock(pico_w_cyw43_device);
   return rv;
 }
 
@@ -455,38 +472,58 @@ int pico_w_cyw43_iface_status(const struct device *dev,
 
   struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
   
-  status->iface_mode = (((cyw43_state.itf_state >> CYW43_ITF_AP) & 1) ? WIFI_MODE_AP : WIFI_MODE_INFRA);
+  status->iface_mode = (((cyw43_state.itf_state >> CYW43_ITF_AP) & 1) ? WIFI_MODE_AP :
+			((cyw43_state.itf_state >> CYW43_ITF_STA) & 1) ? WIFI_MODE_INFRA :
+			WIFI_MODE_UNKNOWN);
 
   //TODO: look harder to see if there's a way to actually retrieve this... until then,
   // hard code to 802.11n
   status->link_mode = WIFI_4;
-    
-  int link_status=cyw43_wifi_link_status(&cyw43_state, (status->iface_mode == WIFI_MODE_AP) ? CYW43_ITF_AP : CYW43_ITF_STA);
-  switch (link_status) {
-  case CYW43_LINK_JOIN:
+
+  if (status->iface_mode == WIFI_MODE_INFRA) {
+    int link_status=cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+    switch (link_status) {
+    case CYW43_LINK_JOIN:
+      status->state = WIFI_STATE_COMPLETED;
+      break;
+    case CYW43_LINK_NONET:
+      status->state = WIFI_STATE_INACTIVE;
+      break;
+    default:
+      status->state = WIFI_STATE_DISCONNECTED;
+    }
+  }
+  else if (status->iface_mode == WIFI_MODE_AP) {
     status->state = WIFI_STATE_COMPLETED;
-    break;
-  case CYW43_LINK_NONET:
-    status->state = WIFI_STATE_INACTIVE;
-    break;
-  default:
+  }
+  else {
     status->state = WIFI_STATE_DISCONNECTED;
   }
-
+  
   cyw43_wifi_get_bssid(&cyw43_state, (char *) &(status->bssid[0]));
 
   status->band = WIFI_FREQ_BAND_2_4_GHZ;
 
+  
   cyw43_ioctl(&cyw43_state, CYW43_IOCTL_GET_CHANNEL, sizeof(status->channel),
-	      (uint8_t *)&status->channel, CYW43_ITF_STA); 
-  
-  cyw43_wifi_get_rssi(&cyw43_state, (int32_t *) &(status->rssi));
+	      (uint8_t *)&status->channel, (status->iface_mode == WIFI_MODE_INFRA ? CYW43_ITF_STA : CYW43_ITF_AP)); 
 
-  strcpy(status->ssid, (status->state == WIFI_STATE_COMPLETED ? pico_w_cyw43_device->connect_params.ssid : ""));
-  status->ssid_len = strlen(pico_w_cyw43_device->connect_params.ssid);
-  
-  status->security = pico_w_cyw43_device->connect_params.security;
 
+  if (status->iface_mode == WIFI_MODE_INFRA) {
+    cyw43_wifi_get_rssi(&cyw43_state, (int32_t *) &(status->rssi));
+
+    strcpy(status->ssid, (status->state == WIFI_STATE_COMPLETED ? pico_w_cyw43_device->connect_params.ssid : ""));
+    status->ssid_len = strlen(pico_w_cyw43_device->connect_params.ssid);
+  
+    status->security = pico_w_cyw43_device->connect_params.security;
+  }
+  else if (status->iface_mode == WIFI_MODE_AP) {
+    strcpy(status->ssid, (status->state == WIFI_STATE_COMPLETED ? pico_w_cyw43_device->ap_params.ssid : ""));
+    status->ssid_len = strlen(pico_w_cyw43_device->ap_params.ssid);
+  
+    status->security = pico_w_cyw43_device->ap_params.security;
+  }
+  
   if (!cyw43_wifi_get_pm(&cyw43_state, &(pico_w_cyw43_device->pm_params.pm_in))) {
     if ((pico_w_cyw43_device->pm_params.pm_in & 0x0000000f) != CYW43_NO_POWERSAVE_MODE) {
       status->beacon_interval = (pico_w_cyw43_device->pm_params.pm_in & 0x0000F000) >> 12;
