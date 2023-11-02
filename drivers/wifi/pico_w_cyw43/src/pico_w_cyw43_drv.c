@@ -264,6 +264,7 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev_t *pico_w_cyw43_devic
 	rv = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);	
         if (rv) { goto error; }
 	cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, false, CYW43_COUNTRY_WORLDWIDE);
+	cyw43_state.itf_state &= ~(1 << CYW43_ITF_STA); // cyw43_ctrl doesn't handle reset the itf state bit.
 	
 	LOG_DBG("Disconnected!");
 
@@ -349,6 +350,7 @@ static int pico_w_cyw43_disable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_devic
   pico_w_cyw43_lock(pico_w_cyw43_device);
   rv = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_AP); 
   cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, false, CYW43_COUNTRY_WORLDWIDE);
+  cyw43_state.itf_state &= ~(1 << CYW43_ITF_AP); // cyw43_ctrl doesn't handle reset the itf state bit.
   pico_w_cyw43_unlock(pico_w_cyw43_device);
   return rv;  
 }
