@@ -54,15 +54,14 @@ static void pico_w_cyw43_event_poll_thread(void *p1)
 	}
       }
       
-
-      pico_w_cyw43_lock(pico_w_cyw43);
       if (cyw43_poll) {
+	pico_w_cyw43_lock(pico_w_cyw43);
 	cyw43_poll();
+	pico_w_cyw43_unlock(pico_w_cyw43);
       }
       else {
 	LOG_DBG("Not calling cyw43_poll() from poll_thread, because it doesn't exist.");
       }
-      pico_w_cyw43_unlock(pico_w_cyw43);
    }
     
 }
@@ -115,9 +114,7 @@ static int pico_w_cyw43_scan(struct pico_w_cyw43_dev_t *pico_w_cyw43_dev, bool a
 	if (!cyw43_wifi_scan_active(&cyw43_state)) {
 	  memset(&scan_options, 0, sizeof(cyw43_wifi_scan_options_t));
 	  scan_options.scan_type = (active ? 0 : 1);
-	  pico_w_cyw43_lock(pico_w_cyw43);
 	  err = cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, process_cyw43_scan_result);
-	  pico_w_cyw43_unlock(pico_w_cyw43);
 	  
 	  if (err == 0) {
 	    LOG_DBG("Performing wifi scan");
@@ -211,16 +208,11 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 	for (int i=0; i<5; i++) {
 	  rv = 0;
 
-	  pico_w_cyw43_lock(pico_w_cyw43_device);
-
-	  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
-	  
 	  rv = cyw43_wifi_join(&cyw43_state, cyw43_ssid_len, cyw43_ssid, cyw43_key_len, cyw43_key, cyw43_auth_type, cyw43_bssid, cyw43_channel);
 	  if (rv) {
 	    LOG_ERR("failed to connect.\n");
 	    continue;
 	  } 
-	  pico_w_cyw43_unlock(pico_w_cyw43_device);
 	  
 	  // In my experience, full connection was always achieved before 4 seconds (j==8), but
 	  // increasing it may ben necessary on some wifi networks. Unfortunately increasing it
@@ -241,13 +233,11 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 	}
 
 	if (rv == 1) {
+	  net_if_dormant_on(pico_w_cyw43_device->iface);
 	  LOG_DBG("pico_w_cyw43_connect failed to connect.\n");
 	}
 	else {
-	  pico_w_cyw43_lock(pico_w_cyw43_device);
-	  net_if_carrier_on(pico_w_cyw43_device->iface);
 	  wifi_mgmt_raise_connect_result_event(pico_w_cyw43_device->iface, rv);
-	  pico_w_cyw43_unlock(pico_w_cyw43_device);
 	  
 	  LOG_DBG("pico_w_cyw43_connect connected.\n");
 	}
@@ -260,21 +250,17 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev_t *pico_w_cyw43_devic
 {
         LOG_DBG("Disconnecting from %s", pico_w_cyw43_device->connect_params.ssid);
 	int rv;
-	pico_w_cyw43_lock(pico_w_cyw43_device);
 	rv = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);	
         if (rv) { goto error; }
-	cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, false, CYW43_COUNTRY_WORLDWIDE);
+
 	cyw43_state.itf_state &= ~(1 << CYW43_ITF_STA); // cyw43_ctrl doesn't handle reset the itf state bit.
 	
 	LOG_DBG("Disconnected!");
 
-	net_if_carrier_off(pico_w_cyw43_device->iface);
 	wifi_mgmt_raise_disconnect_result_event(pico_w_cyw43_device->iface, rv);
-	pico_w_cyw43_unlock(pico_w_cyw43_device);
 	return rv;
 
 error:
-	pico_w_cyw43_unlock(pico_w_cyw43_device);
 	return -EIO;
 }
 
@@ -338,29 +324,24 @@ static int pico_w_cyw43_enable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device
 
 	cyw43_wifi_ap_set_channel(&cyw43_state, cyw43_channel);
 	cyw43_wifi_ap_set_auth(&cyw43_state, cyw43_auth);	
+	pico_w_cyw43_unlock(pico_w_cyw43_device);
 	
 	cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, true, CYW43_COUNTRY_WORLDWIDE);
-	pico_w_cyw43_unlock(pico_w_cyw43_device);
+
         return rv;  
 }
 
 static int pico_w_cyw43_disable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
-  int rv=0;
-  pico_w_cyw43_lock(pico_w_cyw43_device);
-  rv = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_AP); 
   cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, false, CYW43_COUNTRY_WORLDWIDE);
   cyw43_state.itf_state &= ~(1 << CYW43_ITF_AP); // cyw43_ctrl doesn't handle reset the itf state bit.
-  pico_w_cyw43_unlock(pico_w_cyw43_device);
-  return rv;  
+  return 0;
 }
 
 static int pico_w_cyw43_set_pm(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
   int rv=0;
-  pico_w_cyw43_lock(pico_w_cyw43_device);
   rv = cyw43_wifi_pm(&cyw43_state, pico_w_cyw43_device->pm_params.pm_out);
-  pico_w_cyw43_unlock(pico_w_cyw43_device);
   return rv;
 }
 
@@ -414,8 +395,6 @@ static int pico_w_cyw43_send(const struct device *dev, struct net_pkt *pkt)
   int rv;
   struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
   
-  pico_w_cyw43_lock(pico_w_cyw43_device);
-
   LOG_DBG("Calling pico_w_cyw43_send()  -  packet length=%d)\n", net_pkt_get_len(pkt));
   
   // TODO: May want to do do the work in a work queue (example: eswifi_offload.c::eswifi_off_send())
@@ -439,8 +418,6 @@ static int pico_w_cyw43_send(const struct device *dev, struct net_pkt *pkt)
 	pico_w_cyw43_device->stats.pkts.tx++;
 #endif
 
-  pico_w_cyw43_unlock(pico_w_cyw43_device);
-
  out:  
   return (rv == 0 ? 0 : -EIO);
 }
@@ -460,7 +437,6 @@ static void pico_w_cyw43_iface_init(struct net_if *iface)
   net_if_set_link_addr(iface, cyw43_state.mac, 6, NET_LINK_ETHERNET);  
   
   ethernet_init(iface);
-  net_if_carrier_off(iface);
   
   pico_w_cyw43_unlock(pico_w_cyw43);
 
@@ -696,10 +672,11 @@ static int pico_w_cyw43_pm_status(const struct device *dev, struct wifi_ps_confi
   uint8_t li_dtim_period = 0;
   uint8_t li_assoc = 0;
 
-  pico_w_cyw43_lock(pico_w_cyw43_device);
+
 
   if (!cyw43_wifi_get_pm(&cyw43_state, &(pico_w_cyw43_device->pm_params.pm_in))) {
     LOG_DBG("pico_w_cyw43_device->pm_params.pm_in = %xu\n", pico_w_cyw43_device->pm_params.pm_in);
+    pico_w_cyw43_lock(pico_w_cyw43_device);
     pm_mode = (uint8_t) (pico_w_cyw43_device->pm_params.pm_in & 0x0000000f);
     pm2_sleep_ret_ms = (uint16_t) ((pico_w_cyw43_device->pm_params.pm_in & 0x00000ff0) >> 4);
     li_beacon_period = (uint8_t) ((pico_w_cyw43_device->pm_params.pm_in & 0x00000ff0) >> 12);
@@ -711,13 +688,12 @@ static int pico_w_cyw43_pm_status(const struct device *dev, struct wifi_ps_confi
       config->ps_params.wakeup_mode = (li_dtim_period ? WIFI_PS_WAKEUP_MODE_DTIM : WIFI_PS_WAKEUP_MODE_LISTEN_INTERVAL);
       config->ps_params.timeout_ms = pm2_sleep_ret_ms * 10;
     }
+    pico_w_cyw43_unlock(pico_w_cyw43_device);
   }
   else {
     LOG_ERR("cyw43_wifi_get_pm() returned error.\n"); 
   }
-  pico_w_cyw43_unlock(pico_w_cyw43_device);
 
-  
   return 0;
 }
 
@@ -786,26 +762,22 @@ void cyw43_cb_tcpip_init(cyw43_t *self, int itf)
 
 void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf)
 {
-  struct net_if *iface;
+  //struct net_if *iface;
   LOG_DBG("Calling cyw43_cb_tcpip_set_link_up(itf=%d)", itf);
 
-#if defined(CONFIG_NET_DHCPV4)    
-  iface = net_if_get_by_index(itf);
-  net_dhcpv4_start(iface);
-#endif  
+  //#if defined(CONFIG_NET_DHCPV4)    
+  //iface = net_if_get_by_index(itf);
+  //net_dhcpv4_start(iface);
+  //#endif  
   return;
 }
 
 void cyw43_cb_tcpip_set_link_down(cyw43_t *self, int itf)
 {
-  struct net_if *iface;
+  // struct net_if *iface;
   
   LOG_DBG("Calling cyw43_cb_tcpip_set_link_down(itf=%d)", itf);
 
-#if defined(CONFIG_NET_DHCPV4)    
-  iface = net_if_get_by_index(itf);
-  net_dhcpv4_stop(iface);
-#endif  
   return;
 }
 
