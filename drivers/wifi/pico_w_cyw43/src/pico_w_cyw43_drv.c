@@ -159,6 +159,8 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 	uint32_t cyw43_ssid_len;
 	uint32_t cyw43_key_len;
 	const uint8_t *cyw43_bssid = NULL;
+	int rv;
+	
 
 	LOG_DBG("connect_params.security = %d\n", pico_w_cyw43_device->connect_params.security);
 	switch (pico_w_cyw43_device->connect_params.security) {
@@ -199,8 +201,6 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 		"cyw43_key=%s, cyw43_auth_type=%d, cyw43_channel=%d\n",
 		cyw43_ssid_len, cyw43_ssid, cyw43_key_len,
 		cyw43_key, cyw43_auth_type, cyw43_channel);
-	
-	int rv;
 
 	// This looks unbelievably goofy, but the comments in cyw43.h say:
 	//   "After success is returned, periodically call \ref cyw43_wifi_link_status or cyw43_tcpip_link_status,
@@ -232,11 +232,16 @@ static int pico_w_cyw43_connect(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 	  }
 	}
 
-	if (rv == 1) {
+	if (rv != 0) {
 	  net_if_dormant_on(pico_w_cyw43_device->iface);
 	  LOG_DBG("pico_w_cyw43_connect failed to connect.\n");
 	}
 	else {
+	  net_if_dormant_off(pico_w_cyw43_device->iface);
+
+#if defined(CONFIG_NET_DHCPV4)
+	  net_dhcpv4_restart(pico_w_cyw43_device->iface);
+#endif
 	  wifi_mgmt_raise_connect_result_event(pico_w_cyw43_device->iface, rv);
 	  
 	  LOG_DBG("pico_w_cyw43_connect connected.\n");
@@ -250,12 +255,16 @@ static int pico_w_cyw43_disconnect(struct pico_w_cyw43_dev_t *pico_w_cyw43_devic
 {
         LOG_DBG("Disconnecting from %s", pico_w_cyw43_device->connect_params.ssid);
 	int rv;
+	
 	rv = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);	
         if (rv) { goto error; }
 
-	cyw43_state.itf_state &= ~(1 << CYW43_ITF_STA); // cyw43_ctrl doesn't handle reset the itf state bit.
-	
 	LOG_DBG("Disconnected!");
+
+#if defined(CONFIG_NET_DHCPV4)
+	net_dhcpv4_stop(pico_w_cyw43_device->iface);
+#endif
+	net_if_dormant_on(pico_w_cyw43_device->iface);
 
 	wifi_mgmt_raise_disconnect_result_event(pico_w_cyw43_device->iface, rv);
 	return rv;
@@ -334,6 +343,7 @@ static int pico_w_cyw43_enable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device
 static int pico_w_cyw43_disable_ap(struct pico_w_cyw43_dev_t *pico_w_cyw43_device)
 {
   cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, false, CYW43_COUNTRY_WORLDWIDE);
+  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_STA, true, CYW43_COUNTRY_WORLDWIDE);
   cyw43_state.itf_state &= ~(1 << CYW43_ITF_AP); // cyw43_ctrl doesn't handle reset the itf state bit.
   return 0;
 }
@@ -437,6 +447,12 @@ static void pico_w_cyw43_iface_init(struct net_if *iface)
   net_if_set_link_addr(iface, cyw43_state.mac, 6, NET_LINK_ETHERNET);  
   
   ethernet_init(iface);
+
+  net_if_carrier_on(iface);
+
+  net_if_dormant_on(iface);
+
+  net_dhcpv4_stop(iface);
   
   pico_w_cyw43_unlock(pico_w_cyw43);
 
@@ -545,7 +561,26 @@ static int pico_w_cyw43_mgmt_connect(const struct device *dev,
 				     struct wifi_connect_req_params *params)
 {
   struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
+  int rv=0;
+  
   LOG_DBG("");
+
+  if ((cyw43_state.itf_state >> CYW43_ITF_STA) & 1) {
+    int link_status=cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+    
+    if (link_status == CYW43_LINK_JOIN || link_status == CYW43_LINK_NONET) {
+      LOG_ERR("Already connected.\n");
+      rv = -EAGAIN;
+      return rv;
+    }
+  }
+  
+  if ((cyw43_state.itf_state >> CYW43_ITF_AP) & 1) {
+    LOG_ERR("Please disable access point mode before initiating a client connection.\n");
+    rv = -EBUSY;
+    return rv;
+  }
+    
   pico_w_cyw43_lock(pico_w_cyw43_device);
 
   // Copy the relevant parameters into our own structure, because there's no
@@ -561,7 +596,8 @@ static int pico_w_cyw43_mgmt_connect(const struct device *dev,
   k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
 
   pico_w_cyw43_unlock(pico_w_cyw43_device);
-  return 0;
+  
+  return rv;
 }
 
 static int pico_w_cyw43_mgmt_disconnect(const struct device *dev)
@@ -580,8 +616,26 @@ static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
 				       struct wifi_connect_req_params *params)
 {
   struct pico_w_cyw43_dev_t *pico_w_cyw43_device = dev->data;
+  int rv = 0;
   
   LOG_DBG("Calling mgmt_ap_enable()\n");
+
+  if ((cyw43_state.itf_state >> CYW43_ITF_AP) & 1) {
+    LOG_ERR("Already in AP mode..\n");
+    rv = -EAGAIN;
+    return rv;
+  }
+
+  if ((cyw43_state.itf_state >> CYW43_ITF_STA) & 1) {
+    
+    int link_status=cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+    
+    if (link_status == CYW43_LINK_JOIN || link_status == CYW43_LINK_NONET) {
+      LOG_ERR("Currently connected as a client. Please disconnect before enabling AP.\n");
+      rv = -EBUSY;
+      return rv;
+    }      
+  }
 
   pico_w_cyw43_lock(pico_w_cyw43_device);
 
@@ -595,7 +649,8 @@ static int pico_w_cyw43_mgmt_ap_enable(const struct device *dev,
   pico_w_cyw43_device->req = PICOWCYW43_REQ_ENABLE_AP;
   k_work_submit_to_queue(&pico_w_cyw43_device->work_q, &pico_w_cyw43_device->request_work);
   pico_w_cyw43_unlock(pico_w_cyw43_device);
-  return 0;    
+  
+  return rv;    
 }
 
 static int pico_w_cyw43_mgmt_ap_disable(const struct device *dev)
