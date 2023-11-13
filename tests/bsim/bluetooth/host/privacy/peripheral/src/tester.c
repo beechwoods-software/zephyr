@@ -9,6 +9,7 @@
 #include <zephyr/bluetooth/conn.h>
 #include <stdint.h>
 #include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/settings/settings.h>
 
 #define EXPECTED_NUM_ROTATIONS 5
 
@@ -58,6 +59,10 @@ static void validate_rpa_addr_generated_for_adv_sets(void)
 static void test_address(bt_addr_le_t *addr)
 {
 	int64_t diff_ms, rpa_timeout_ms;
+
+	if (!BT_ADDR_IS_RPA(&addr->a)) {
+		FAIL("Bluetooth address is not RPA\n");
+	}
 
 	/* Only save the address + time if this is the first scan */
 	if (bt_addr_le_eq(&adv_set_data[adv_index].old_addr, BT_ADDR_LE_ANY)) {
@@ -126,6 +131,11 @@ void tester_procedure(void)
 
 	if (err) {
 		FAIL("Failed to enable bluetooth (err %d\n)", err);
+	}
+
+	err = settings_load();
+	if (err) {
+		FAIL("Failed to enable settings (err %d\n)", err);
 	}
 
 	start_scanning();

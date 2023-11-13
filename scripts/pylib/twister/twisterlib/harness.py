@@ -268,6 +268,7 @@ class Pytest(Harness):
         config = self.instance.testsuite.harness_config
         pytest_root = config.get('pytest_root', ['pytest']) if config else ['pytest']
         pytest_args = config.get('pytest_args', []) if config else []
+        pytest_dut_scope = config.get('pytest_dut_scope', None) if config else None
         command = [
             'pytest',
             '--twister-harness',
@@ -281,6 +282,8 @@ class Pytest(Harness):
         command.extend([os.path.normpath(os.path.join(
             self.source_dir, os.path.expanduser(os.path.expandvars(src)))) for src in pytest_root])
         command.extend(pytest_args)
+        if pytest_dut_scope:
+            command.append(f'--dut-scope={pytest_dut_scope}')
 
         handler: Handler = self.instance.handler
 
@@ -418,8 +421,10 @@ class Pytest(Harness):
         if elem_ts := root.find('testsuite'):
             if elem_ts.get('failures') != '0':
                 self.state = 'failed'
+                self.instance.reason = f"{elem_ts.get('failures')}/{elem_ts.get('tests')} pytest scenario(s) failed"
             elif elem_ts.get('errors') != '0':
                 self.state = 'error'
+                self.instance.reason = 'Error during pytest execution'
             elif elem_ts.get('skipped') == elem_ts.get('tests'):
                 self.state = 'skipped'
             else:
@@ -427,7 +432,7 @@ class Pytest(Harness):
             self.instance.execution_time = float(elem_ts.get('time'))
 
             for elem_tc in elem_ts.findall('testcase'):
-                tc = self.instance.get_case_or_create(f"{self.id}.{elem_tc.get('name')}")
+                tc = self.instance.add_testcase(f"{self.id}.{elem_tc.get('name')}")
                 tc.duration = float(elem_tc.get('time'))
                 elem = elem_tc.find('*')
                 if elem is None:
@@ -445,16 +450,22 @@ class Pytest(Harness):
 
 class Gtest(Harness):
     ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    TEST_START_PATTERN = r"\[ RUN      \] (?P<suite_name>.*)\.(?P<test_name>.*)$"
-    TEST_PASS_PATTERN = r"\[       OK \] (?P<suite_name>.*)\.(?P<test_name>.*)$"
-    TEST_FAIL_PATTERN = r"\[  FAILED  \] (?P<suite_name>.*)\.(?P<test_name>.*)$"
-    FINISHED_PATTERN = r"\[==========\] Done running all tests\.$"
-    has_failures = False
-    tc = None
+    TEST_START_PATTERN = r".*\[ RUN      \] (?P<suite_name>.*)\.(?P<test_name>.*)$"
+    TEST_PASS_PATTERN = r".*\[       OK \] (?P<suite_name>.*)\.(?P<test_name>.*)$"
+    TEST_FAIL_PATTERN = r".*\[  FAILED  \] (?P<suite_name>.*)\.(?P<test_name>.*)$"
+    FINISHED_PATTERN = r".*\[==========\] Done running all tests\.$"
+
+    def __init__(self):
+        super().__init__()
+        self.tc = None
+        self.has_failures = False
 
     def handle(self, line):
         # Strip the ANSI characters, they mess up the patterns
         non_ansi_line = self.ANSI_ESCAPE.sub('', line)
+
+        if self.state:
+            return
 
         # Check if we started running a new test
         test_start_match = re.search(self.TEST_START_PATTERN, non_ansi_line)

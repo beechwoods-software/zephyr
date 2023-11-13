@@ -31,6 +31,15 @@ static inline int llext_seek(struct llext_loader *l, size_t pos)
 	return l->seek(l, pos);
 }
 
+static inline void *llext_peek(struct llext_loader *l, size_t pos)
+{
+	if (l->peek) {
+		return l->peek(l, pos);
+	}
+
+	return NULL;
+}
+
 static sys_slist_t _llext_list = SYS_SLIST_STATIC_INIT(&_llext_list);
 
 sys_slist_t *llext_list(void)
@@ -150,15 +159,21 @@ out:
 	return ret;
 }
 
+static const char *llext_string(struct llext_loader *ldr, struct llext *ext,
+				enum llext_mem mem_idx, unsigned int idx)
+{
+	return (char *)ext->mem[mem_idx] + idx;
+}
+
 /*
  * Maps the section indexes and copies special section headers for easier use
  */
-static int llext_map_sections(struct llext_loader *ldr)
+static int llext_map_sections(struct llext_loader *ldr, struct llext *ext)
 {
 	int ret = 0;
 	size_t pos = ldr->hdr.e_shoff;
 	elf_shdr_t shdr;
-	char name[32];
+	const char *name;
 
 	for (int i = 0; i < ldr->hdr.e_shnum; i++) {
 		ret = llext_seek(ldr, pos);
@@ -173,31 +188,19 @@ static int llext_map_sections(struct llext_loader *ldr)
 
 		pos += ldr->hdr.e_shentsize;
 
-		elf_word str_idx = shdr.sh_name;
-
-		ret = llext_seek(ldr, ldr->sects[LLEXT_SECT_SHSTRTAB].sh_offset + str_idx);
-		if (ret != 0) {
-			goto out;
-		}
-
-		ret = llext_read(ldr, name, sizeof(name));
-		if (ret != 0) {
-			goto out;
-		}
-
-		name[sizeof(name) - 1] = '\0';
+		name = llext_string(ldr, ext, LLEXT_MEM_SHSTRTAB, shdr.sh_name);
 
 		LOG_DBG("section %d name %s", i, name);
 
 		enum llext_section sect_idx;
 
-		if (strncmp(name, ".text", sizeof(name)) == 0) {
+		if (strcmp(name, ".text") == 0) {
 			sect_idx = LLEXT_SECT_TEXT;
-		} else if (strncmp(name, ".data", sizeof(name)) == 0) {
+		} else if (strcmp(name, ".data") == 0) {
 			sect_idx = LLEXT_SECT_DATA;
-		} else if (strncmp(name, ".rodata", sizeof(name)) == 0) {
+		} else if (strcmp(name, ".rodata") == 0) {
 			sect_idx = LLEXT_SECT_RODATA;
-		} else if (strncmp(name, ".bss", sizeof(name)) == 0) {
+		} else if (strcmp(name, ".bss") == 0) {
 			sect_idx = LLEXT_SECT_BSS;
 		} else {
 			LOG_DBG("Not copied section %s", name);
@@ -229,6 +232,12 @@ static inline enum llext_section llext_sect_from_mem(enum llext_mem m)
 	case LLEXT_MEM_TEXT:
 		s = LLEXT_SECT_TEXT;
 		break;
+	case LLEXT_MEM_STRTAB:
+		s = LLEXT_SECT_STRTAB;
+		break;
+	case LLEXT_MEM_SHSTRTAB:
+		s = LLEXT_SECT_SHSTRTAB;
+		break;
 	default:
 		CODE_UNREACHABLE;
 	}
@@ -236,57 +245,85 @@ static inline enum llext_section llext_sect_from_mem(enum llext_mem m)
 	return s;
 }
 
-static int llext_allocate_mem(struct llext_loader *ldr, struct llext *ext)
+static int llext_copy_section(struct llext_loader *ldr, struct llext *ext,
+			      enum llext_mem mem_idx)
 {
-	int ret = 0;
-	enum llext_section sect_idx;
+	enum llext_section sect_idx = llext_sect_from_mem(mem_idx);
+	int ret;
 
-	for (enum llext_mem mem_idx = 0; mem_idx < LLEXT_MEM_COUNT; mem_idx++) {
-		sect_idx = llext_sect_from_mem(mem_idx);
+	if (!ldr->sects[sect_idx].sh_size) {
+		return 0;
+	}
 
-		if (ldr->sects[sect_idx].sh_size > 0) {
-			ext->mem[mem_idx] =
-				k_heap_aligned_alloc(&llext_heap, sizeof(uintptr_t),
-						     ldr->sects[sect_idx].sh_size,
-						     K_NO_WAIT);
-
-			if (ext->mem[mem_idx] == NULL) {
-				ret = -ENOMEM;
-				goto out;
-			}
+	if (ldr->sects[sect_idx].sh_type != SHT_NOBITS) {
+		ext->mem[mem_idx] = llext_peek(ldr, ldr->sects[sect_idx].sh_offset);
+		if (ext->mem[mem_idx]) {
+			ext->mem_on_heap[mem_idx] = false;
+			return 0;
 		}
 	}
 
-out:
+	ext->mem[mem_idx] = k_heap_aligned_alloc(&llext_heap, sizeof(uintptr_t),
+						 ldr->sects[sect_idx].sh_size,
+						 K_NO_WAIT);
+	if (!ext->mem[mem_idx]) {
+		return -ENOMEM;
+	}
+	ext->mem_size += ldr->sects[sect_idx].sh_size;
+
+	if (ldr->sects[sect_idx].sh_type == SHT_NOBITS) {
+		memset(ext->mem[mem_idx], 0, ldr->sects[sect_idx].sh_size);
+	} else {
+		ret = llext_seek(ldr, ldr->sects[sect_idx].sh_offset);
+		if (ret != 0) {
+			goto err;
+		}
+
+		ret = llext_read(ldr, ext->mem[mem_idx], ldr->sects[sect_idx].sh_size);
+		if (ret != 0) {
+			goto err;
+		}
+	}
+
+	ext->mem_on_heap[mem_idx] = true;
+
+	return 0;
+
+err:
+	k_heap_free(&llext_heap, ext->mem[mem_idx]);
+	return ret;
+}
+
+static int llext_copy_strings(struct llext_loader *ldr, struct llext *ext)
+{
+	int ret = llext_copy_section(ldr, ext, LLEXT_MEM_SHSTRTAB);
+
+	if (!ret) {
+		ret = llext_copy_section(ldr, ext, LLEXT_MEM_STRTAB);
+	}
+
 	return ret;
 }
 
 static int llext_copy_sections(struct llext_loader *ldr, struct llext *ext)
 {
-	int ret = 0;
-	enum llext_section sect_idx;
-
 	for (enum llext_mem mem_idx = 0; mem_idx < LLEXT_MEM_COUNT; mem_idx++) {
-		sect_idx = llext_sect_from_mem(mem_idx);
+		/* strings have already been copied */
+		if (ext->mem[mem_idx]) {
+			continue;
+		}
 
-		if (ldr->sects[sect_idx].sh_size > 0) {
-			ret = llext_seek(ldr, ldr->sects[sect_idx].sh_offset);
-			if (ret != 0) {
-				goto out;
-			}
+		int ret = llext_copy_section(ldr, ext, mem_idx);
 
-			ret = llext_read(ldr, ext->mem[mem_idx], ldr->sects[sect_idx].sh_size);
-			if (ret != 0) {
-				goto out;
-			}
+		if (ret < 0) {
+			return ret;
 		}
 	}
 
-out:
-	return ret;
+	return 0;
 }
 
-static int llext_count_export_syms(struct llext_loader *ldr)
+static int llext_count_export_syms(struct llext_loader *ldr, struct llext *ext)
 {
 	int ret = 0;
 	elf_sym_t sym;
@@ -294,7 +331,7 @@ static int llext_count_export_syms(struct llext_loader *ldr)
 	size_t syms_size = ldr->sects[LLEXT_SECT_SYMTAB].sh_size;
 	size_t pos = ldr->sects[LLEXT_SECT_SYMTAB].sh_offset;
 	size_t sym_cnt = syms_size / sizeof(elf_sym_t);
-	char name[32];
+	const char *name;
 
 	LOG_DBG("symbol count %u", sym_cnt);
 
@@ -315,17 +352,7 @@ static int llext_count_export_syms(struct llext_loader *ldr)
 		uint32_t stb = ELF_ST_BIND(sym.st_info);
 		uint32_t sect = sym.st_shndx;
 
-		ret = llext_seek(ldr, ldr->sects[LLEXT_SECT_STRTAB].sh_offset + sym.st_name);
-		if (ret != 0) {
-			goto out;
-		}
-
-		ret = llext_read(ldr, name, sizeof(name));
-		if (ret != 0) {
-			goto out;
-		}
-
-		name[sizeof(name) - 1] = '\0';
+		name = llext_string(ldr, ext, LLEXT_MEM_STRTAB, sym.st_name);
 
 		if (stt == STT_FUNC && stb == STB_GLOBAL) {
 			LOG_DBG("function symbol %d, name %s, type tag %d, bind %d, sect %d",
@@ -344,11 +371,13 @@ out:
 static inline int llext_allocate_symtab(struct llext_loader *ldr, struct llext *ext)
 {
 	int ret = 0;
+	size_t syms_size = ldr->sym_cnt * sizeof(struct llext_symbol);
 
-	ext->sym_tab.syms = k_heap_alloc(&llext_heap, ldr->sym_cnt * sizeof(struct llext_symbol),
+	ext->sym_tab.syms = k_heap_alloc(&llext_heap, syms_size,
 				       K_NO_WAIT);
 	ext->sym_tab.sym_cnt = ldr->sym_cnt;
 	memset(ext->sym_tab.syms, 0, ldr->sym_cnt * sizeof(struct llext_symbol));
+	ext->mem_size += syms_size;
 
 	return ret;
 }
@@ -361,7 +390,6 @@ static inline int llext_copy_symbols(struct llext_loader *ldr, struct llext *ext
 	size_t syms_size = ldr->sects[LLEXT_SECT_SYMTAB].sh_size;
 	size_t pos = ldr->sects[LLEXT_SECT_SYMTAB].sh_offset;
 	size_t sym_cnt = syms_size / sizeof(elf_sym_t);
-	char name[32];
 	int i, j = 0;
 
 	for (i = 0; i < sym_cnt; i++) {
@@ -381,21 +409,10 @@ static inline int llext_copy_symbols(struct llext_loader *ldr, struct llext *ext
 		uint32_t stb = ELF_ST_BIND(sym.st_info);
 		uint32_t sect = sym.st_shndx;
 
-		ret = llext_seek(ldr, ldr->sects[LLEXT_SECT_STRTAB].sh_offset + sym.st_name);
-		if (ret != 0) {
-			goto out;
-		}
-
-		ret = llext_read(ldr, name, sizeof(name));
-		if (ret != 0) {
-			goto out;
-		}
-
 		if (stt == STT_FUNC && stb == STB_GLOBAL && sect != SHN_UNDEF) {
-			ext->sym_tab.syms[j].name = k_heap_alloc(&llext_heap,
-							       sizeof(name),
-							       K_NO_WAIT);
-			strcpy(ext->sym_tab.syms[j].name, name);
+			const char *name = llext_string(ldr, ext, LLEXT_MEM_STRTAB, sym.st_name);
+
+			ext->sym_tab.syms[j].name = name;
 			ext->sym_tab.syms[j].addr =
 				(void *)((uintptr_t)ext->mem[ldr->sect_map[sym.st_shndx]]
 					 + sym.st_value);
@@ -409,16 +426,20 @@ out:
 	return ret;
 }
 
+__weak void arch_elf_relocate(elf_rela_t *rel, uintptr_t opaddr, uintptr_t opval)
+{
+}
+
 static int llext_link(struct llext_loader *ldr, struct llext *ext)
 {
 	int ret = 0;
 	uintptr_t loc = 0;
 	elf_shdr_t shdr;
-	elf_rel_t rel;
+	elf_rela_t rel;
 	elf_sym_t sym;
 	size_t pos = ldr->hdr.e_shoff;
 	elf_word rel_cnt = 0;
-	char name[32];
+	const char *name;
 
 	for (int i = 0; i < ldr->hdr.e_shnum - 1; i++) {
 		ret = llext_seek(ldr, pos);
@@ -440,25 +461,16 @@ static int llext_link(struct llext_loader *ldr, struct llext *ext)
 
 		rel_cnt = shdr.sh_size / sizeof(elf_rel_t);
 
+		name = llext_string(ldr, ext, LLEXT_MEM_SHSTRTAB, shdr.sh_name);
 
-		ret = llext_seek(ldr, ldr->sects[LLEXT_SECT_SHSTRTAB].sh_offset + shdr.sh_name);
-		if (ret != 0) {
-			goto out;
-		}
-
-		ret = llext_read(ldr, name, sizeof(name));
-		if (ret != 0) {
-			goto out;
-		}
-
-		if (strncmp(name, ".rel.text", sizeof(name)) == 0 ||
-		    strncmp(name, ".rela.text", sizeof(name)) == 0) {
+		if (strcmp(name, ".rel.text") == 0 ||
+		    strcmp(name, ".rela.text") == 0) {
 			loc = (uintptr_t)ext->mem[LLEXT_MEM_TEXT];
-		} else if (strncmp(name, ".rel.bss", sizeof(name)) == 0) {
+		} else if (strcmp(name, ".rel.bss") == 0) {
 			loc = (uintptr_t)ext->mem[LLEXT_MEM_BSS];
-		} else if (strncmp(name, ".rel.rodata", sizeof(name)) == 0) {
+		} else if (strcmp(name, ".rel.rodata") == 0) {
 			loc = (uintptr_t)ext->mem[LLEXT_MEM_RODATA];
-		} else if (strncmp(name, ".rel.data", sizeof(name)) == 0) {
+		} else if (strcmp(name, ".rel.data") == 0) {
 			loc = (uintptr_t)ext->mem[LLEXT_MEM_DATA];
 		}
 
@@ -489,16 +501,7 @@ static int llext_link(struct llext_loader *ldr, struct llext *ext)
 				goto out;
 			}
 
-			ret = llext_seek(ldr, ldr->sects[LLEXT_SECT_STRTAB].sh_offset +
-				    sym.st_name);
-			if (ret != 0) {
-				goto out;
-			}
-
-			ret = llext_read(ldr, name, sizeof(name));
-			if (ret != 0) {
-				goto out;
-			}
+			name = llext_string(ldr, ext, LLEXT_MEM_STRTAB, sym.st_name);
 
 			LOG_DBG("relocation %d:%d info %x (type %d, sym %d) offset %d sym_name "
 				"%s sym_type %d sym_bind %d sym_ndx %d",
@@ -578,6 +581,7 @@ static int do_llext_load(struct llext_loader *ldr, struct llext *ext)
 	}
 	memset(ldr->sect_map, 0, ldr->hdr.e_shnum*sizeof(uint32_t));
 	ldr->sect_cnt = ldr->hdr.e_shnum;
+	ext->mem_size += sect_map_sz;
 
 	LOG_DBG("Finding ELF tables...");
 	ret = llext_find_tables(ldr);
@@ -586,21 +590,21 @@ static int do_llext_load(struct llext_loader *ldr, struct llext *ext)
 		goto out;
 	}
 
+	LOG_DBG("Allocate and copy strings...");
+	ret = llext_copy_strings(ldr, ext);
+	if (ret != 0) {
+		LOG_ERR("Failed to copy ELF string sections, ret %d", ret);
+		goto out;
+	}
+
 	LOG_DBG("Mapping ELF sections...");
-	ret = llext_map_sections(ldr);
+	ret = llext_map_sections(ldr, ext);
 	if (ret != 0) {
 		LOG_ERR("Failed to map ELF sections, ret %d", ret);
 		goto out;
 	}
 
-	LOG_DBG("Allocation memory for ELF sections...");
-	ret = llext_allocate_mem(ldr, ext);
-	if (ret != 0) {
-		LOG_ERR("Failed to map memory for ELF sections, ret %d", ret);
-		goto out;
-	}
-
-	LOG_DBG("Copying sections...");
+	LOG_DBG("Allocate and copy sections...");
 	ret = llext_copy_sections(ldr, ext);
 	if (ret != 0) {
 		LOG_ERR("Failed to copy ELF sections, ret %d", ret);
@@ -608,7 +612,7 @@ static int do_llext_load(struct llext_loader *ldr, struct llext *ext)
 	}
 
 	LOG_DBG("Counting exported symbols...");
-	ret = llext_count_export_syms(ldr);
+	ret = llext_count_export_syms(ldr, ext);
 	if (ret != 0) {
 		LOG_ERR("Failed to count exported ELF symbols, ret %d", ret);
 		goto out;
@@ -643,13 +647,8 @@ out:
 	if (ret != 0) {
 		LOG_DBG("Failed to load extension, freeing memory...");
 		for (enum llext_mem mem_idx = 0; mem_idx < LLEXT_MEM_COUNT; mem_idx++) {
-			if (ext->mem[mem_idx] != NULL) {
+			if (ext->mem_on_heap[mem_idx]) {
 				k_heap_free(&llext_heap, ext->mem[mem_idx]);
-			}
-		}
-		for (int i = 0; i < ext->sym_tab.sym_cnt; i++) {
-			if (ext->sym_tab.syms[i].name != NULL) {
-				k_heap_free(&llext_heap, ext->sym_tab.syms[i].name);
 			}
 		}
 		k_heap_free(&llext_heap, ext->sym_tab.syms);
@@ -663,7 +662,7 @@ out:
 
 int llext_load(struct llext_loader *ldr, const char *name, struct llext **ext)
 {
-	int ret = 0;
+	int ret;
 	elf_ehdr_t ehdr;
 
 	ret = llext_seek(ldr, 0);
@@ -729,7 +728,7 @@ void llext_unload(struct llext *ext)
 	sys_slist_find_and_remove(&_llext_list, &ext->_llext_list);
 
 	for (int i = 0; i < LLEXT_MEM_COUNT; i++) {
-		if (ext->mem[i] != NULL) {
+		if (ext->mem_on_heap[i]) {
 			LOG_DBG("freeing memory region %d", i);
 			k_heap_free(&llext_heap, ext->mem[i]);
 			ext->mem[i] = NULL;
@@ -737,9 +736,6 @@ void llext_unload(struct llext *ext)
 	}
 
 	if (ext->sym_tab.syms != NULL) {
-		for (int i = 0; i < ext->sym_tab.sym_cnt; i++) {
-			k_heap_free(&llext_heap, ext->sym_tab.syms[i].name);
-		}
 		k_heap_free(&llext_heap, ext->sym_tab.syms);
 	}
 

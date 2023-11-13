@@ -216,7 +216,8 @@ void z_arm_platform_init(void)
 	SystemInit();
 }
 
-static void clock_init(void)
+/* Weak so that board can override with their own clock init routine. */
+void __weak rt5xx_clock_init(void)
 {
 	/* Configure LPOSC 1M */
 	/* Power on LPOSC (1MHz) */
@@ -418,6 +419,10 @@ static void clock_init(void)
 	CLOCK_SetClkDiv(kCLOCK_DivAdcClk, 1);
 #endif
 
+#if CONFIG_COUNTER_NXP_MRT
+	RESET_PeripheralReset(kMRT0_RST_SHIFT_RSTn);
+#endif
+
 	/* Set SystemCoreClock variable. */
 	SystemCoreClock = CLOCK_INIT_CORE_CLOCK;
 
@@ -426,7 +431,8 @@ static void clock_init(void)
 }
 
 #if CONFIG_MIPI_DSI
-void imxrt_pre_init_display_interface(void)
+/* Weak so board can override this function */
+void __weak imxrt_pre_init_display_interface(void)
 {
 	/* Assert MIPI DPHY reset. */
 	RESET_SetPeripheralReset(kMIPI_DSI_PHY_RST_SHIFT_RSTn);
@@ -462,7 +468,7 @@ void imxrt_pre_init_display_interface(void)
 	RESET_ClearPeripheralReset(kMIPI_DSI_CTRL_RST_SHIFT_RSTn);
 }
 
-void imxrt_post_init_display_interface(void)
+void __weak imxrt_post_init_display_interface(void)
 {
 	/* Deassert MIPI DPHY reset. */
 	RESET_ClearPeripheralReset(kMIPI_DSI_PHY_RST_SHIFT_RSTn);
@@ -481,7 +487,7 @@ void imxrt_post_init_display_interface(void)
 static int nxp_rt500_init(void)
 {
 	/* Initialize clocks with tool generated code */
-	clock_init();
+	rt5xx_clock_init();
 
 #ifndef CONFIG_IMXRT5XX_CODE_CACHE
 	CACHE64_DisableCache(CACHE64_CTRL0);
