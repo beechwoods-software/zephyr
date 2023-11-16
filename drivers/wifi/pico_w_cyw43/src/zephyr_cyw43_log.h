@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define LOG_MODULE_NAME wifi_pico_w_cyw43
+#define LOG_MODULE_NAME zephyr_cyw43
 #define LOG_LEVEL CONFIG_WIFI_LOG_LEVEL
 
 #if 1
 
 #include <zephyr/logging/log.h>
 
-#else // 0
+#else
 
 #undef LOG_MODULE_REGISTER
 #define LOG_MODULE_REGISTER(x, y)
@@ -24,4 +24,4 @@
 #undef LOG_ERR
 #define LOG_ERR(x, ...)
 
-#endif // 0
+#endif

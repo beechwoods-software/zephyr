@@ -3,7 +3,7 @@
 # Copyright (c) 2023 Beechwoods Software
 # SPDX-License-Identifier: Apache-2.0
 
-menuconfig WIFI_RPIPICOWCYW43
+menuconfig WIFI_ZEPHYR_CYW43
 	bool "Infineon CYW43 Wifi support"
 	default y
 	select NET_L2_WIFI_MGMT
@@ -12,19 +12,13 @@ menuconfig WIFI_RPIPICOWCYW43
 	select NET_SOCKETS
 	imply NET_SOCKETS_OFFLOAD
 
-        #comment these three out to use the picowi pio-spi
 	select GPIO
-	select SPI # TODO: Seems like the line below should do this too?
-	#select SPI_RPI_PICO_PIO
+	select SPI
+	select SPI_RPI_PICO_PIO	
+        select PICOSDK_USE_PIO # This can be removed once Zephyr PIO-SPI works
 	
-        select PICOSDK_USE_PIO # Temporary until Steve gets his stuff working
-	#select PICOSDK_USE_DMA
-	#select PICOSDK_USE_CLAIM
-	#select PICOSDK_USE_GPIO	
-	#select PICOSDK_USE_PWM
-	
-#if WIFI_RPIPICOWCYW43
-config WIFI_RPIPICOWCYW43_SHELL
+#if WIFI_ZEPHYR_CYW43
+config WIFI_ZEPHYR_CYW43_SHELL
 	bool "CYW43 shell"
 	depends on SHELL
 	help
@@ -40,17 +34,13 @@ config USE_PICOWI_PIOSPI
         bool "Use picowi PIO-SPI, but nothing else"
 	default n
 
-config BUILD_CYW43_WITH_ZEPHYR_PIO_SPI
-        bool "Use Zephyr's PIO SPI bus"
-	default n
-
 config LED_INIT_PRIORITY
     int "Wifi led driver init priority"
     default 80
 
 # Power Save params
 
-config WIFI_RPIPICOWCYW43_POWERSAVE_MODE
+config WIFI_ZEPHYR_CYW43_POWERSAVE_MODE
 	int "Powersave Mode (0 - off, 1 - PM1(aggressive), 2 - PM2(perfomrance)"
 	range 0 2
 	default 0
@@ -58,28 +48,28 @@ config WIFI_RPIPICOWCYW43_POWERSAVE_MODE
 	  This chooses the basic powersave mode of the cyw43. PM1 saves more power, but
 	  reduces throughput. PM2 doesn't significantly reduce throughput.
 
-config WIFI_RPIPICOWCYW43_POWERSAVE_PM2_SLEEP_RET_MS
+config WIFI_ZEPHYR_CYW43_POWERSAVE_PM2_SLEEP_RET_MS
 	int "Powersave sleep return time (0-255 x 10ms)"
 	range 0 255
 	default 200
 	help
 	   The maximum time to wait before going back to sleep for CYW43_PM2_POWERSAVE_MODE mode.
 
-config WIFI_RPIPICOWCYW43_POWERSAVE_LI_BEACON_PERIOD
+config WIFI_ZEPHYR_CYW43_POWERSAVE_LI_BEACON_PERIOD
 	int "Wake period (0-15)"
 	range 0 15
 	default 1
 	help
 	   Wake period is measured in beacon period.
 
-config WIFI_RPIPICOWCYW43_POWERSAVE_LI_DTIM_PERIOD
+config WIFI_ZEPHYR_CYW43_POWERSAVE_LI_DTIM_PERIOD
 	int "Wake period (0-15)"
 	range 0 15
 	default 1
 	help
 	   Wake interval measured in DTIMs. If this is set to 0, the wake interval is measured in beacon periods.
 
-config WIFI_RPIPICOWCYW43_POWERSAVE_LI_ASSOC
+config WIFI_ZEPHYR_CYW43_POWERSAVE_LI_ASSOC
 	int "Wake interval (0-15)"
 	range 0 15
 	default 10

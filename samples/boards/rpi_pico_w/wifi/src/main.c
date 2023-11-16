@@ -35,6 +35,7 @@ int main(void)
 	 */
 
   if (strcmp(CONFIG_WIFI_SSID, "") && strcmp(CONFIG_WIFI_PSK, "")) {
+    sleep(1);
     printf("Connecting to network \"%s\"\n", CONFIG_WIFI_SSID);
     wifi_connect(CONFIG_WIFI_SSID, CONFIG_WIFI_PSK);
   }

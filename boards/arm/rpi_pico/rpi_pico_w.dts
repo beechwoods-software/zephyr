@@ -33,7 +33,7 @@
     	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
 		clk-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 		sio-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
-		pico_w_cyw43: pico_w_cyw43@0 {
+		infineon_cyw43_module: infineon_cyw43_module@0 {
 			compatible = "infineon,cyw43";
 			reg = < 0x0 >;
 			spi-max-frequency = < 1000000 >;
