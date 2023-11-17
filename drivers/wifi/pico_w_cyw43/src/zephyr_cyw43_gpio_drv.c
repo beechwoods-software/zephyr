@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Yonatan Schachter
+ * Copyright (c) 2023, Beechwoods Software, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  */

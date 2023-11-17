@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 Beechwoods Software
+ * Copyright (c) 2023 Beechwoods Software, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -32,29 +32,28 @@ struct zephyr_cyw43_cfg {
         struct gpio_dt_spec wl_on_gpio;
 };
 
-struct zephyr_cyw43_connect_params_t {
+struct zephyr_cyw43_connect_params {
         char ssid[WIFI_SSID_MAX_LEN + 1];
         char psk[65];
         uint32_t security;
         uint32_t channel;
 };
 
-struct zephyr_cyw43_poewr_save_params_t {
+struct zephyr_cyw43_power_save_params {
         uint32_t pm_out;
         uint32_t pm_in;
 };
 
-// TODO: should "_t" all of the other structure types.
-struct zephyr_cyw43_dev_t {
+typedef struct zephyr_cyw43_device_params {
         struct net_if *iface;
         struct zephyr_cyw43_bus_ops *bus;
         scan_result_cb_t scan_cb;
         struct k_work_q work_q;
         struct k_work request_work;
         struct k_work_delayable status_work;
-        struct zephyr_cyw43_connect_params_t connect_params;
-        struct zephyr_cyw43_connect_params_t ap_params;
-        struct zephyr_cyw43_poewr_save_params_t pm_params;
+        struct zephyr_cyw43_connect_params connect_params;
+        struct zephyr_cyw43_connect_params ap_params;
+        struct zephyr_cyw43_power_save_params pm_params;
         enum zephyr_cyw43_request req;
         enum zephyr_cyw43_role role;
         struct net_stats_wifi stats;
@@ -63,9 +62,9 @@ struct zephyr_cyw43_dev_t {
         atomic_val_t mutex_owner;
         unsigned int mutex_depth;
         struct k_sem event_sem;
-};
+} zephyr_cyw43_dev_t;
 
-static inline void zephyr_cyw43_lock(struct zephyr_cyw43_dev_t *zephyr_cyw43_dev)
+static inline void zephyr_cyw43_lock(zephyr_cyw43_dev_t *zephyr_cyw43_dev)
 {
         /* Nested locking */
         if (atomic_get(&zephyr_cyw43_dev->mutex_owner) != (atomic_t)(uintptr_t)_current) {
@@ -77,7 +76,7 @@ static inline void zephyr_cyw43_lock(struct zephyr_cyw43_dev_t *zephyr_cyw43_dev
         }
 }
 
-static inline void zephyr_cyw43_unlock(struct zephyr_cyw43_dev_t *zephyr_cyw43_dev)
+static inline void zephyr_cyw43_unlock(zephyr_cyw43_dev_t *zephyr_cyw43_dev)
 {
         if (!--zephyr_cyw43_dev->mutex_depth) {
                 atomic_set(&zephyr_cyw43_dev->mutex_owner, -1);
@@ -93,7 +92,7 @@ static inline void zephyr_cyw43_unlock(struct zephyr_cyw43_dev_t *zephyr_cyw43_d
       WIFI_SECURITY_TYPE_UNKNOWN))))
 
 #if defined(CONFIG_WIFI_ZEPHYR_CYW43_SHELL)
-void zephyr_cyw43_shell_register(struct zephyr_cyw43_dev_t *dev);
+void zephyr_cyw43_shell_register(zephyr_cyw43_dev_t *dev);
 #else
 #define zephyr_cyw43_shell_register(dev)
 #endif

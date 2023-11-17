@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 Beechwoods Software
+ * Copyright (c) 2023 Beechwoods Software, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,9 +14,9 @@
 const struct device *const led_device =  DEVICE_DT_GET_ANY(infineon_cyw43_led);
 
 #if defined(CONFIG_WIFI_ZEPHYR_CYW43_SHELL)
-static struct zephyr_cyw43_dev_t *zephyr_cyw43_dev;
+static zephyr_cyw43_dev_t *zephyr_cyw43_dev;
 
-void zephyr_cyw43_shell_register(struct zephyr_cyw43_dev_t *dev)
+void zephyr_cyw43_shell_register(zephyr_cyw43_dev_t *dev)
 {
         /* only one instance supported */
         if (zephyr_cyw43_dev) {

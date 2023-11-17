@@ -30,14 +30,10 @@
 #include "hardware/uart.h"
 #include "hardware/structs/timer.h"
 #include "picowi_pico.h"
-#include "picowi_wifi.h"
 
 // Initialise hardware
 void io_init(void)
 {
-  // stdio_init_all();
-  //  stdio_uart_init_full(uart0, 115200, -1, -1);
-  //stdio_uart_init_full(uart1, 115200, 6, 7);
     printf("calling gpio_set_input_hysteresis_enabled(SD_DIN_PIN, true); \n");
     gpio_set_input_hysteresis_enabled(SD_DIN_PIN, true);
 }
@@ -109,11 +105,6 @@ int mstimeout(uint32_t *tickp, int msec)
 
 void usdelay(uint32_t usec)
 {
-
-// DMR - k_msleep should work here as far as I know, but it blocks forever somwhere pretty early on.
-#if 0
-  k_msleep(usec/1000);
-#else  
   uint32_t ticks, msec;
     msec = usec/1000;
     if (msec)
@@ -121,7 +112,6 @@ void usdelay(uint32_t usec)
         mstimeout(&ticks, 0);
         while (!mstimeout(&ticks, msec)) ;
     }
-#endif    
 }
 
 
