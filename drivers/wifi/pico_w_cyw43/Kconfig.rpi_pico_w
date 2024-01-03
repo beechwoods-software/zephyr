@@ -8,13 +8,10 @@ menuconfig WIFI_ZEPHYR_CYW43
 	default y
 	select NET_L2_WIFI_MGMT
 	select WIFI_USE_NATIVE_NETWORKING
-	select NET_OFFLOAD
-	select NET_SOCKETS
-	imply NET_SOCKETS_OFFLOAD
 
 	select GPIO
-	select SPI
-	select SPI_RPI_PICO_PIO	
+	#select SPI
+	#select SPI_RPI_PICO_PIO	
         select PICOSDK_USE_PIO # This can be removed once Zephyr PIO-SPI works
 	
 #if WIFI_ZEPHYR_CYW43

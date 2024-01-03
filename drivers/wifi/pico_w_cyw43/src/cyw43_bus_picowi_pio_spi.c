@@ -21,8 +21,8 @@
 #include <zephyr/drivers/spi.h>
 
 #include "hardware/gpio.h"
-#include "picowi/picowi_pio.h"
-#include "picowi/picowi_pico.h"
+#include "picowi_pio/picowi_pio.h"
+#include "picowi_pio/picowi_pico.h"
 
 #define WHD_BUS_SPI_BACKPLANE_READ_PADD_SIZE        (4)
 

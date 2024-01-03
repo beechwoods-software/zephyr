@@ -12,8 +12,8 @@ if(CONFIG_WIFI_ZEPHYR_CYW43)
       src/georgerobotics/cyw43_ll.c
       src/georgerobotics/cyw43_ctrl.c
       src/cyw43_bus_picowi_pio_spi.c
-      src/picowi/picowi_pio.c
-      src/picowi/picowi_pico.c
+      src/picowi_pio/picowi_pio.c
+      src/picowi_pio/picowi_pico.c
     )
 
   else()
