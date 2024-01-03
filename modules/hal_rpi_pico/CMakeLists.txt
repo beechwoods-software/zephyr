@@ -42,7 +42,7 @@ if(CONFIG_HAS_RPI_PICO)
       BUILD_ALWAYS TRUE
       )
 
-      add_dependencies(${ZEPHYR_CURRENT_LIBRARY} second_stage_bootloader)
+      zephyr_library_add_dependencies(second_stage_bootloader)
       zephyr_library_sources(${rp2_bootloader_asm})
   endif()
 
@@ -82,8 +82,6 @@ if(CONFIG_HAS_RPI_PICO)
   zephyr_include_directories_ifdef(CONFIG_PICOSDK_USE_GPIO
           ${rp2_common_dir}/hardware_gpio/include)
 
-  zephyr_library_sources_ifdef(CONFIG_PICOSDK_USE_UART
-          ${rp2_common_dir}/hardware_uart/uart.c)
   zephyr_include_directories_ifdef(CONFIG_PICOSDK_USE_UART
           ${rp2_common_dir}/hardware_uart/include)
 

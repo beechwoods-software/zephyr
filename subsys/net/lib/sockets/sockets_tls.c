@@ -741,6 +741,14 @@ static int wait(int sock, int timeout, int event)
 		}
 
 		if (fds.revents & ZSOCK_POLLERR) {
+			int optval;
+			socklen_t optlen = sizeof(optval);
+
+			if (zsock_getsockopt(fds.fd, SOL_SOCKET, SO_ERROR,
+					     &optval, &optlen) == 0) {
+				return -optval;
+			}
+
 			return -EIO;
 		}
 	}
@@ -2230,10 +2238,9 @@ static ssize_t send_tls(struct tls_context *ctx, const void *buf,
 			timeout_ms = timeout_to_ms(&timeout);
 			ret = wait_for_reason(ctx->sock, timeout_ms, ret);
 			if (ret != 0) {
-				/* Retry. */
+				errno = -ret;
 				break;
 			}
-
 		} else {
 			(void)tls_mbedtls_reset(ctx);
 			errno = EIO;

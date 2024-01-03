@@ -17,7 +17,6 @@ if ADC
 
 config ADC_SHELL
 	bool "ADC Shell"
-	default y
 	depends on SHELL
 	help
 	  Enable ADC Shell for testing.
@@ -119,5 +118,7 @@ source "drivers/adc/Kconfig.max11102_17"
 source "drivers/adc/Kconfig.ad5592"
 
 source "drivers/adc/Kconfig.ltc2451"
+
+source "drivers/adc/Kconfig.numaker"
 
 endif # ADC

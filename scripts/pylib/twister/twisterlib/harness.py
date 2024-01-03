@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 
+from twisterlib.error import ConfigurationError
 from twisterlib.environment import ZEPHYR_BASE, PYTEST_PLUGIN_INSTALLED
 from twisterlib.handlers import Handler, terminate_process, SUPPORTED_SIMS_IN_PYTEST
 from twisterlib.testinstance import TestInstance
@@ -54,8 +55,8 @@ class Harness:
         self.capture_coverage = False
         self.next_pattern = 0
         self.record = None
+        self.record_pattern = None
         self.recording = []
-        self.fieldnames = []
         self.ztest = False
         self.detected_suite_names = []
         self.run_id = None
@@ -79,6 +80,16 @@ class Harness:
             self.repeat = config.get('repeat', 1)
             self.ordered = config.get('ordered', True)
             self.record = config.get('record', {})
+            if self.record:
+                self.record_pattern = re.compile(self.record.get("regex", ""))
+
+
+    def get_testcase_name(self):
+        """
+        Get current TestCase name.
+        """
+        return self.id
+
 
     def process_test(self, line):
 
@@ -160,8 +171,29 @@ class Robot(Harness):
 
 class Console(Harness):
 
+    def get_testcase_name(self):
+        '''
+        Get current TestCase name.
+
+        Console Harness id has only TestSuite id without TestCase name suffix.
+        Only the first TestCase name might be taken if available when a Ztest with
+        a single test case is configured to use this harness type for simplified
+        output parsing instead of the Ztest harness as Ztest suite should do.
+        '''
+        if self.instance and len(self.instance.testcases) == 1:
+            return self.instance.testcases[0].name
+        return super(Console, self).get_testcase_name()
+
     def configure(self, instance):
         super(Console, self).configure(instance)
+        if self.regex is None or len(self.regex) == 0:
+            self.state = "failed"
+            tc = self.instance.set_case_status_by_name(
+                self.get_testcase_name(),
+                "failed",
+                f"HARNESS:{self.__class__.__name__}:no regex patterns configured."
+            )
+            raise ConfigurationError(self.instance.name, tc.reason)
         if self.type == "one_line":
             self.pattern = re.compile(self.regex[0])
             self.patterns_expected = 1
@@ -170,17 +202,29 @@ class Console(Harness):
             for r in self.regex:
                 self.patterns.append(re.compile(r))
             self.patterns_expected = len(self.patterns)
+        else:
+            self.state = "failed"
+            tc = self.instance.set_case_status_by_name(
+                self.get_testcase_name(),
+                "failed",
+                f"HARNESS:{self.__class__.__name__}:incorrect type={self.type}"
+            )
+            raise ConfigurationError(self.instance.name, tc.reason)
+        #
 
     def handle(self, line):
         if self.type == "one_line":
             if self.pattern.search(line):
-                logger.debug(f"HARNESS:{self.__class__.__name__}:EXPECTED({self.next_pattern}):'{self.pattern.pattern}'")
+                logger.debug(f"HARNESS:{self.__class__.__name__}:EXPECTED:"
+                             f"'{self.pattern.pattern}'")
                 self.next_pattern += 1
                 self.state = "passed"
         elif self.type == "multi_line" and self.ordered:
             if (self.next_pattern < len(self.patterns) and
                 self.patterns[self.next_pattern].search(line)):
-                logger.debug(f"HARNESS:{self.__class__.__name__}:EXPECTED({self.next_pattern}):'{self.patterns[self.next_pattern].pattern}'")
+                logger.debug(f"HARNESS:{self.__class__.__name__}:EXPECTED("
+                             f"{self.next_pattern + 1}/{self.patterns_expected}):"
+                             f"'{self.patterns[self.next_pattern].pattern}'")
                 self.next_pattern += 1
                 if self.next_pattern >= len(self.patterns):
                     self.state = "passed"
@@ -189,6 +233,9 @@ class Console(Harness):
                 r = self.regex[i]
                 if pattern.search(line) and not r in self.matches:
                     self.matches[r] = line
+                    logger.debug(f"HARNESS:{self.__class__.__name__}:EXPECTED("
+                                 f"{len(self.matches)}/{self.patterns_expected}):"
+                                 f"'{pattern.pattern}'")
             if len(self.matches) == len(self.regex):
                 self.state = "passed"
         else:
@@ -203,34 +250,31 @@ class Console(Harness):
         elif self.GCOV_END in line:
             self.capture_coverage = False
 
-
-        if self.record:
-            pattern = re.compile(self.record.get("regex", ""))
-            match = pattern.search(line)
+        if self.record_pattern:
+            match = self.record_pattern.search(line)
             if match:
-                csv = []
-                if not self.fieldnames:
-                    for k,v in match.groupdict().items():
-                        self.fieldnames.append(k)
-
-                for k,v in match.groupdict().items():
-                    csv.append(v.strip())
-                self.recording.append(csv)
+                self.recording.append({ k:v.strip() for k,v in match.groupdict(default="").items() })
 
         self.process_test(line)
-        # Reset the resulting test state to 'failed' for 'one_line' and
-        # ordered 'multi_line' patterns when not all of these patterns were
+        # Reset the resulting test state to 'failed' when not all of the patterns were
         # found in the output, but just ztest's 'PROJECT EXECUTION SUCCESSFUL'.
         # It might happen because of the pattern sequence diverged from the
         # test code, the test platform has console issues, or even some other
         # test image was executed.
-        # TODO: Introduce explicit match policy type either to reject
-        # unexpected console output, or to allow missing patterns.
+        # TODO: Introduce explicit match policy type to reject
+        # unexpected console output, allow missing patterns, deny duplicates.
         if self.state == "passed" and self.ordered and self.next_pattern < self.patterns_expected:
-            logger.error(f"HARNESS:{self.__class__.__name__}: failed with only {self.next_pattern} matched patterns from expected {self.patterns_expected}")
+            logger.error(f"HARNESS:{self.__class__.__name__}: failed with"
+                         f" {self.next_pattern} of {self.patterns_expected}"
+                         f" expected ordered patterns.")
+            self.state = "failed"
+        if self.state == "passed" and not self.ordered and len(self.matches) < self.patterns_expected:
+            logger.error(f"HARNESS:{self.__class__.__name__}: failed with"
+                         f" {len(self.matches)} of {self.patterns_expected}"
+                         f" expected unordered patterns.")
             self.state = "failed"
 
-        tc = self.instance.get_case_or_create(self.id)
+        tc = self.instance.get_case_or_create(self.get_testcase_name())
         if self.state == "passed":
             tc.status = "passed"
         else:
@@ -266,8 +310,9 @@ class Pytest(Harness):
 
     def generate_command(self):
         config = self.instance.testsuite.harness_config
+        handler: Handler = self.instance.handler
         pytest_root = config.get('pytest_root', ['pytest']) if config else ['pytest']
-        pytest_args = config.get('pytest_args', []) if config else []
+        pytest_args_yaml = config.get('pytest_args', []) if config else []
         pytest_dut_scope = config.get('pytest_dut_scope', None) if config else None
         command = [
             'pytest',
@@ -281,11 +326,9 @@ class Pytest(Harness):
         ]
         command.extend([os.path.normpath(os.path.join(
             self.source_dir, os.path.expanduser(os.path.expandvars(src)))) for src in pytest_root])
-        command.extend(pytest_args)
+
         if pytest_dut_scope:
             command.append(f'--dut-scope={pytest_dut_scope}')
-
-        handler: Handler = self.instance.handler
 
         if handler.options.verbose > 1:
             command.extend([
@@ -303,6 +346,16 @@ class Pytest(Harness):
             command.append('--device-type=custom')
         else:
             raise PytestHarnessException(f'Handling of handler {handler.type_str} not implemented yet')
+
+        if handler.options.pytest_args:
+            command.extend(handler.options.pytest_args)
+            if pytest_args_yaml:
+                logger.warning(f'The pytest_args ({handler.options.pytest_args}) specified '
+                               'in the command line will override the pytest_args defined '
+                               f'in the YAML file {pytest_args_yaml}')
+        else:
+            command.extend(pytest_args_yaml)
+
         return command
 
     def _generate_parameters_for_hardware(self, handler: Handler):
@@ -446,6 +499,9 @@ class Pytest(Harness):
                         tc.status = 'error'
                     tc.reason = elem.get('message')
                     tc.output = elem.text
+        else:
+            self.state = 'skipped'
+            self.instance.reason = 'No tests collected'
 
 
 class Gtest(Harness):

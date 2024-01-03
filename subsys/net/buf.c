@@ -166,7 +166,7 @@ const struct net_buf_data_cb net_buf_fixed_cb = {
 	.unref = fixed_data_unref,
 };
 
-#if (CONFIG_HEAP_MEM_POOL_SIZE > 0)
+#if (K_HEAP_MEM_POOL_SIZE > 0)
 
 static uint8_t *heap_data_alloc(struct net_buf *buf, size_t *size,
 			     k_timeout_t timeout)
@@ -205,7 +205,7 @@ const struct net_buf_data_alloc net_buf_heap_alloc = {
 	.cb = &net_buf_heap_cb,
 };
 
-#endif /* CONFIG_HEAP_MEM_POOL_SIZE > 0 */
+#endif /* K_HEAP_MEM_POOL_SIZE > 0 */
 
 static uint8_t *data_alloc(struct net_buf *buf, size_t *size, k_timeout_t timeout)
 {
@@ -219,17 +219,6 @@ static uint8_t *data_ref(struct net_buf *buf, uint8_t *data)
 	struct net_buf_pool *pool = net_buf_pool_get(buf->pool_id);
 
 	return pool->alloc->cb->ref(buf, data);
-}
-
-static void data_unref(struct net_buf *buf, uint8_t *data)
-{
-	struct net_buf_pool *pool = net_buf_pool_get(buf->pool_id);
-
-	if (buf->flags & NET_BUF_EXTERNAL_DATA) {
-		return;
-	}
-
-	pool->alloc->cb->unref(buf, data);
 }
 
 #if defined(CONFIG_NET_BUF_LOG)
@@ -482,11 +471,6 @@ void net_buf_unref(struct net_buf *buf)
 
 		if (--buf->ref > 0) {
 			return;
-		}
-
-		if (buf->__buf) {
-			data_unref(buf, buf->__buf);
-			buf->__buf = NULL;
 		}
 
 		buf->data = NULL;

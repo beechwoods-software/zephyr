@@ -24,8 +24,18 @@ config ENABLE_LC3
 	bool "Enable the LC3 codec"
 	# By default let's enable it in the platforms we know are capable of supporting it
 	default y
-	depends on (ARCH_POSIX || SOC_NRF5340_CPUAPP)
+	depends on CPU_HAS_FPU && \
+		(ARCH_POSIX || SOC_COMPATIBLE_NRF52X || SOC_COMPATIBLE_NRF5340_CPUAPP)
 	select LIBLC3
 	select FPU
+
+config USE_USB_AUDIO_INPUT
+	bool "Use USB Audio as input"
+	# By default, use the USB Audio path is disabled.
+	default n
+	depends on ENABLE_LC3
+	select USB_DEVICE_STACK
+	select USB_DEVICE_AUDIO
+	select RING_BUFFER
 
 source "Kconfig.zephyr"

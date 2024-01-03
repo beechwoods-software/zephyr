@@ -16,7 +16,7 @@
 #if DT_SAME_NODE(DT_INST_PROP(0, clock_source), DT_PATH(clocks, pll))
 #define SYSCLK_SRC pll
 #elif DT_SAME_NODE(DT_INST_PROP(0, clock_source), DT_PATH(clocks, mosc))
-#define SYSCLK_SRC moco
+#define SYSCLK_SRC mosc
 #elif DT_SAME_NODE(DT_INST_PROP(0, clock_source), DT_PATH(clocks, sosc))
 #define SYSCLK_SRC soco
 #elif DT_SAME_NODE(DT_INST_PROP(0, clock_source), DT_PATH(clocks, hoco))
@@ -289,6 +289,8 @@ static int clock_control_ra_init(const struct device *dev)
 	SYSTEM_write32(SCKDIVCR_OFFSET, SCKDIVCR_INIT_VALUE);
 	SYSTEM_write8(SCKSCR_OFFSET, SCKSCR_INIT_VALUE);
 
+	/* re-read system clock setting and apply to hw_cycles */
+	sysclk = SYSTEM_read8(SCKSCR_OFFSET);
 	z_clock_hw_cycles_per_sec = clock_freqs[sysclk];
 
 	SYSTEM_write8(OPCCR_OFFSET, 0);

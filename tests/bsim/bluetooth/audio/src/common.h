@@ -91,12 +91,14 @@ extern struct bt_le_scan_cb common_scan_cb;
 extern const struct bt_data ad[AD_SIZE];
 extern struct bt_conn *default_conn;
 extern atomic_t flag_connected;
+extern atomic_t flag_disconnected;
 extern atomic_t flag_conn_updated;
 extern volatile bt_security_t security_level;
 
 void disconnected(struct bt_conn *conn, uint8_t reason);
 void test_tick(bs_time_t HW_device_time);
 void test_init(void);
+uint16_t get_dev_cnt(void);
 void backchannel_sync_send(uint dev);
 void backchannel_sync_send_all(void);
 void backchannel_sync_wait(uint dev);

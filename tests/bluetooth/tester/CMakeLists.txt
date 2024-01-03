@@ -60,6 +60,10 @@ if (CONFIG_BT_CAP_ACCEPTOR)
     target_sources(app PRIVATE src/btp_cas.c)
 endif()
 
-if(CONFIG_BT_MCC)
+if(CONFIG_BT_MCC OR CONFIG_BT_MCS)
     target_sources(app PRIVATE src/btp_mcp.c)
+endif()
+
+if(CONFIG_BT_HAS)
+    target_sources(app PRIVATE src/btp_hap.c)
 endif()

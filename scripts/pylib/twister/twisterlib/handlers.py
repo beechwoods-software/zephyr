@@ -56,7 +56,7 @@ def terminate_process(proc):
     for child in psutil.Process(proc.pid).children(recursive=True):
         try:
             os.kill(child.pid, signal.SIGTERM)
-        except ProcessLookupError:
+        except (ProcessLookupError, psutil.NoSuchProcess):
             pass
     proc.terminate()
     # sleep for a while before attempting to kill
@@ -100,12 +100,19 @@ class Handler:
 
     def record(self, harness):
         if harness.recording:
+            if self.instance.recording is None:
+                self.instance.recording = harness.recording.copy()
+            else:
+                self.instance.recording.extend(harness.recording)
+
             filename = os.path.join(self.build_dir, "recording.csv")
             with open(filename, "at") as csvfile:
-                cw = csv.writer(csvfile, harness.fieldnames, lineterminator=os.linesep)
-                cw.writerow(harness.fieldnames)
-                for instance in harness.recording:
-                    cw.writerow(instance)
+                cw = csv.DictWriter(csvfile,
+                                    fieldnames = harness.recording[0].keys(),
+                                    lineterminator = os.linesep,
+                                    quoting = csv.QUOTE_NONNUMERIC)
+                cw.writeheader()
+                cw.writerows(harness.recording)
 
     def terminate(self, proc):
         terminate_process(proc)
@@ -182,7 +189,7 @@ class BinaryHandler(Handler):
             self.pid_fn = None  # clear so we don't try to kill the binary twice
             try:
                 os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, psutil.NoSuchProcess):
                 pass
 
     def _output_reader(self, proc):
@@ -246,7 +253,7 @@ class BinaryHandler(Handler):
                        "--track-origins=yes",
                        ] + command
 
-        # Only valid for native_posix
+        # Only valid for native_sim
         if self.seed is not None:
             command.append(f"--seed={self.seed}")
         if self.extra_test_args is not None:
@@ -318,10 +325,6 @@ class BinaryHandler(Handler):
             self.try_kill_process_by_pid()
 
         handler_time = time.time() - start_time
-
-        if self.options.coverage:
-            subprocess.call(["GCOV_PREFIX=" + self.build_dir,
-                             "gcov", self.sourcedir, "-b", "-s", self.build_dir], shell=True)
 
         # FIXME: This is needed when killing the simulator, the console is
         # garbled and needs to be reset. Did not find a better way to do that.
@@ -805,7 +808,7 @@ class QEMUHandler(Handler):
             try:
                 if pid:
                     os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
+            except (ProcessLookupError, psutil.NoSuchProcess):
                 # Oh well, as long as it's dead! User probably sent Ctrl-C
                 pass
 
@@ -864,6 +867,8 @@ class QEMUHandler(Handler):
                         if cpu_time < timeout and not out_state:
                             timeout_time = time.time() + (timeout - cpu_time)
                             continue
+                except psutil.NoSuchProcess:
+                    pass
                 except ProcessLookupError:
                     out_state = "failed"
                     break
@@ -986,6 +991,7 @@ class QEMUHandler(Handler):
         self.thread.daemon = True
         logger.debug("Spawning QEMUHandler Thread for %s" % self.name)
         self.thread.start()
+        thread_max_time = time.time() + self.get_test_timeout()
         if sys.stdout.isatty():
             subprocess.call(["stty", "sane"], stdin=sys.stdout)
 
@@ -1017,8 +1023,8 @@ class QEMUHandler(Handler):
                 self.returncode = proc.returncode
             # Need to wait for harness to finish processing
             # output from QEMU. Otherwise it might miss some
-            # error messages.
-            self.thread.join(0)
+            # messages.
+            self.thread.join(max(thread_max_time - time.time(), 0))
             if self.thread.is_alive():
                 logger.debug("Timed out while monitoring QEMU output")
 

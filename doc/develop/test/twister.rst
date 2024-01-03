@@ -19,7 +19,7 @@ tests for different boards and different configurations to help keep the
 complete code tree buildable.
 
 When using (at least) one ``-v`` option, twister's console output
-shows for every test how the test is run (qemu, native_posix, etc.) or
+shows for every test how the test is run (qemu, native_sim, etc.) or
 whether the binary was just built.  There are a few reasons why twister
 only builds a test and doesn't run it:
 
@@ -478,21 +478,30 @@ harness_config: <harness configuration options>
     type: <one_line|multi_line> (required)
         Depends on the regex string to be matched
 
-
-    record: <recording options>
-      regex: <expression> (required)
-        Any string that the particular test case prints to record test
-        results.
-
-    regex: <expression> (required)
-        Any string that the particular test case prints to confirm test
-        runs as expected.
+    regex: <list of regular expressions> (required)
+        Strings with regular expressions to match with the test's output
+        to confirm the test runs as expected.
 
     ordered: <True|False> (default False)
         Check the regular expression strings in orderly or randomly fashion
 
     repeat: <integer>
         Number of times to validate the repeated regex expression
+
+    record: <recording options> (optional)
+      regex: <regular expression> (required)
+        The regular experssion with named subgroups to match data fields
+        at the test's output lines where the test provides some custom data
+        for further analysis. These records will be written into the build
+        directory 'recording.csv' file as well as 'recording' property
+        of the test suite object in 'twister.json'.
+
+        For example, to extract three data fields 'metric', 'cycles', 'nanoseconds':
+
+        .. code-block:: yaml
+
+          record:
+            regex: "(?P<metric>.*):(?P<cycles>.*) cycles, (?P<nanoseconds>.*) ns"
 
     fixture: <expression>
         Specify a test case dependency on an external device(e.g., sensor),
@@ -505,14 +514,36 @@ harness_config: <harness configuration options>
         Only one fixture can be defined per testcase and the fixture name has to
         be unique across all tests in the test suite.
 
+.. _pytest_root:
+
     pytest_root: <list of pytest testpaths> (default pytest)
-        Specify a list of pytest directories, files or subtests that need to be executed
-        when test case begin to running, default pytest directory is pytest.
-        After pytest finished, twister will check if this case pass or fail according
-        to the pytest report.
+        Specify a list of pytest directories, files or subtests that need to be
+        executed when a test case begins to run. The default pytest directory is
+        ``pytest``. After the pytest run is finished, Twister will check if
+        the test case passed or failed according to the pytest report.
+        As an example, a list of valid pytest roots is presented below:
+
+        .. code-block:: yaml
+
+            harness_config:
+              pytest_root:
+                - "pytest/test_shell_help.py"
+                - "../shell/pytest/test_shell.py"
+                - "/tmp/test_shell.py"
+                - "~/tmp/test_shell.py"
+                - "$ZEPHYR_BASE/samples/subsys/testsuite/pytest/shell/pytest/test_shell.py"
+                - "pytest/test_shell_help.py::test_shell2_sample"  # select pytest subtest
+                - "pytest/test_shell_help.py::test_shell2_sample[param_a]"  # select pytest parametrized subtest
+
+.. _pytest_args:
 
     pytest_args: <list of arguments> (default empty)
-        Specify a list of additional arguments to pass to ``pytest``.
+        Specify a list of additional arguments to pass to ``pytest`` e.g.:
+        ``pytest_args: [‘-k=test_method’, ‘--log-level=DEBUG’]``. Note that
+        ``--pytest-args`` can be passed multiple times to pass several arguments
+        to the pytest.
+
+.. _pytest_dut_scope:
 
     pytest_dut_scope: <function|class|module|package|session> (default function)
         The scope for which ``dut`` and ``shell`` pytest fixtures are shared.
@@ -1050,7 +1081,7 @@ example:
       id: 000683290670
       notes: An nrf5340dk_nrf5340 is detected as an nrf52840dk_nrf52840 with no serial
         port, and three serial ports with an unknown platform.  The board id of the serial
-        ports is not the same as the board id of the the development kit.  If you regenerate
+        ports is not the same as the board id of the development kit.  If you regenerate
         this file you will need to update serial to reference the third port, and platform
         to nrf5340dk_nrf5340_cpuapp or another supported board target.
       platform: nrf52840dk_nrf52840
@@ -1118,7 +1149,7 @@ An example of entries in a quarantine yaml:
         - kernel.common.nano64
       platforms:
         - .*_cortex_.*
-        - native_posix
+        - native_sim
 
 To exclude a platform, use the following syntax:
 
@@ -1272,7 +1303,7 @@ Running in Tests in Random Order
 ********************************
 Enable ZTEST framework's :kconfig:option:`CONFIG_ZTEST_SHUFFLE` config option to
 run your tests in random order.  This can be beneficial for identifying
-dependencies between test cases.  For native_posix platforms, you can provide
+dependencies between test cases. For native_sim platforms, you can provide
 the seed to the random number generator by providing ``-seed=value`` as an
 argument to twister. See :ref:`Shuffling Test Sequence <ztest_shuffle>` for more
 details.

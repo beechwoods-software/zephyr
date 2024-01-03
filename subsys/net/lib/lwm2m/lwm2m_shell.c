@@ -246,14 +246,6 @@ static int cmd_read(const struct shell *sh, size_t argc, char **argv)
 			goto out;
 		}
 		shell_print(sh, "%d\n", temp);
-	} else if (strcmp(dtype, "-u64") == 0) {
-		uint64_t temp = 0;
-
-		ret = lwm2m_get_u64(&path, &temp);
-		if (ret != 0) {
-			goto out;
-		}
-		shell_print(sh, "%lld\n", temp);
 	} else if (strcmp(dtype, "-f") == 0) {
 		double temp = 0;
 
@@ -328,8 +320,10 @@ static int cmd_write(const struct shell *sh, size_t argc, char **argv)
 	} else if (strcmp(dtype, "-f") == 0) {
 		double new = 0;
 
-		lwm2m_atof(value, &new); /* Convert string -> float */
-		ret = lwm2m_set_f64(&path, new);
+		ret = lwm2m_atof(value, &new); /* Convert string -> float */
+		if (ret == 0) {
+			ret = lwm2m_set_f64(&path, new);
+		}
 	} else { /* All the types using stdlib funcs*/
 		char *e;
 
@@ -347,8 +341,6 @@ static int cmd_write(const struct shell *sh, size_t argc, char **argv)
 			ret = lwm2m_set_u16(&path, strtoul(value, &e, 10));
 		} else if (strcmp(dtype, "-u32") == 0) {
 			ret = lwm2m_set_u32(&path, strtoul(value, &e, 10));
-		} else if (strcmp(dtype, "-u64") == 0) {
-			ret = lwm2m_set_u64(&path, strtoull(value, &e, 10));
 		} else if (strcmp(dtype, "-b") == 0) {
 			ret = lwm2m_set_bool(&path, strtoul(value, &e, 10));
 		} else if (strcmp(dtype, "-t") == 0) {
@@ -563,7 +555,7 @@ static int cmd_unlock(const struct shell *sh, size_t argc, char **argv)
 
 static int cmd_cache(const struct shell *sh, size_t argc, char **argv)
 {
-#if (CONFIG_HEAP_MEM_POOL_SIZE > 0)
+#if (K_HEAP_MEM_POOL_SIZE > 0)
 	int rc;
 	int elems;
 	struct lwm2m_time_series_elem *cache;

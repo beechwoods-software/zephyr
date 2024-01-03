@@ -31,6 +31,8 @@
 #include "btp_vcp.h"
 #include "btp_cas.h"
 #include "btp_mcp.h"
+#include "btp_mcs.h"
+#include "btp_hap.h"
 
 #define BTP_MTU 1024
 #define BTP_DATA_MAX_SIZE (BTP_MTU - sizeof(struct btp_hdr))
@@ -61,8 +63,10 @@
 #define BTP_SERVICE_ID_VCP	20
 #define BTP_SERVICE_ID_CAS	21
 #define BTP_SERVICE_ID_MCP	22
+#define BTP_SERVICE_ID_GMCS	23
+#define BTP_SERVICE_ID_HAP	24
 
-#define BTP_SERVICE_ID_MAX	BTP_SERVICE_ID_MCP
+#define BTP_SERVICE_ID_MAX	BTP_SERVICE_ID_HAP
 
 #define BTP_STATUS_SUCCESS	0x00
 #define BTP_STATUS_FAILED	0x01

@@ -11,6 +11,7 @@
 LOG_MODULE_REGISTER(spi_pico_pio);
 
 #include <zephyr/sys/sys_io.h>
+#include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/pinctrl.h>
 #include "spi_context.h"
@@ -28,8 +29,8 @@ struct spi_pico_pio_config {
 	struct gpio_dt_spec clk_gpio;
 	struct gpio_dt_spec mosi_gpio;
 	struct gpio_dt_spec miso_gpio;
-	struct gpio_dt_spec sio_gpio;
-	const uint32_t clock_freq;
+	const struct device *clk_dev;
+	clock_control_subsys_t clk_id;
 };
 
 struct spi_pico_pio_data {
@@ -78,7 +79,7 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_mode_1_1, SPI_MODE_1_1_WRAP_TARGET, SPI_MODE_1_1
 		/*     .wrap */
 );
 
-/* ------------------- */
+static float spi_pico_pio_clock_divisor(const uint32_t clock_freq, uint32_t spi_frequency)
 /* spi_sio_mode_0_0_tx */
 /* ------------------- */
 
@@ -158,22 +159,20 @@ RPI_PICO_PIO_DEFINE_PROGRAM(spi_sio_mode_0_0_32_bit_rx, SPI_SIO_MODE_0_0_32_BIT_
 		/*     .wrap */
 );
 
-static float spi_pico_pio_clock_divisor(const struct spi_pico_pio_config *dev_cfg,
-	int cycles, uint32_t spi_frequency)
 {
-	return (float)dev_cfg->clock_freq / (float)(cycles * spi_frequency);
+	return (float)clock_freq / (float)(PIO_CYCLES * spi_frequency);
 }
 
-static uint32_t spi_pico_pio_maximum_clock_frequency(const struct spi_pico_pio_config *dev_cfg,
+static uint32_t spi_pico_pio_maximum_clock_frequency(const uint32_t clock_freq)
 	int cycles)
 {
-	return dev_cfg->clock_freq / cycles;
+	return clock_freq / PIO_CYCLES;
 }
 
-static uint32_t spi_pico_pio_minimum_clock_frequency(const struct spi_pico_pio_config *dev_cfg,
+static uint32_t spi_pico_pio_minimum_clock_frequency(const uint32_t clock_freq)
 	int cycles)
 {
-	return dev_cfg->clock_freq / (cycles * 65536);
+	return clock_freq / (PIO_CYCLES * 65536);
 }
 
 static inline bool spi_pico_pio_transfer_ongoing(struct spi_pico_pio_data *data)
@@ -241,6 +240,19 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	int cpol = 0;
 	int cpha = 0;
 	int rc = 0;
+	uint32_t clock_freq;
+
+	rc = clock_control_on(dev_cfg->clk_dev, dev_cfg->clk_id);
+	if (rc < 0) {
+		LOG_ERR("Failed to enable the clock");
+		return rc;
+	}
+
+	rc = clock_control_get_rate(dev_cfg->clk_dev, dev_cfg->clk_id, &clock_freq);
+	if (rc < 0) {
+		LOG_ERR("Failed to get clock frequency");
+		return rc;
+	}
 
 	if (spi_context_configured(&data->spi_ctx, spi_cfg)) {
 		return 0;
@@ -274,6 +286,9 @@ static int spi_pico_pio_configure(const struct spi_pico_pio_config *dev_cfg,
 	}
 
 	data->dfs = ((data->bits - 1) / 8) + 1;
+	if ((spi_cfg->frequency < spi_pico_pio_minimum_clock_frequency(clock_freq)) ||
+	    (spi_cfg->frequency > spi_pico_pio_maximum_clock_frequency(clock_freq))) {
+	clock_div = spi_pico_pio_clock_divisor(clock_freq, spi_cfg->frequency);
 
 	/* Half-duplex mode has not been implemented */
 	if (spi_cfg->operation & SPI_HALF_DUPLEX) {
@@ -790,8 +805,8 @@ int spi_pico_pio_init(const struct device *dev)
 		.clk_gpio = GPIO_DT_SPEC_INST_GET(inst, clk_gpios), \
 		.mosi_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, mosi_gpios, {0}), \
 		.miso_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, miso_gpios, {0}), \
-		.sio_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, sio_gpios, {0}), \
-		.clock_freq = DT_INST_PROP_BY_PHANDLE(inst, clocks, clock_frequency), \
+		.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(inst)), \
+		.clk_id = (clock_control_subsys_t)DT_INST_PHA_BY_IDX(inst, clocks, 0, clk_id), \
 	}; \
 	static struct spi_pico_pio_data spi_pico_pio_data_##inst = { \
 		SPI_CONTEXT_INIT_LOCK(spi_pico_pio_data_##inst, spi_ctx), \

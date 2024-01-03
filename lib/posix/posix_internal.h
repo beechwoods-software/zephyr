@@ -12,6 +12,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/posix/pthread.h>
+#include <zephyr/posix/signal.h>
 #include <zephyr/sys/dlist.h>
 #include <zephyr/sys/slist.h>
 
@@ -21,8 +22,23 @@
  */
 #define PTHREAD_OBJ_MASK_INIT 0x80000000
 
+struct posix_thread_attr {
+	void *stack;
+	/* the following two bitfields should combine to be 32-bits in size */
+	uint32_t stacksize : CONFIG_POSIX_PTHREAD_ATTR_STACKSIZE_BITS;
+	uint16_t guardsize : CONFIG_POSIX_PTHREAD_ATTR_GUARDSIZE_BITS;
+	int8_t priority;
+	uint8_t schedpolicy: 2;
+	bool initialized: 1;
+	bool cancelstate: 1;
+	bool detachstate: 1;
+};
+
 struct posix_thread {
 	struct k_thread thread;
+
+	/* List nodes for pthread_cleanup_push() / pthread_cleanup_pop() */
+	sys_slist_t cleanup_list;
 
 	/* List node for ready_q, run_q, or done_q */
 	sys_dnode_t q_node;
@@ -36,8 +52,12 @@ struct posix_thread {
 	/* Exit status */
 	void *retval;
 
+	/* Signal mask */
+	sigset_t sigset;
+
 	/* Pthread cancellation */
 	uint8_t cancel_state;
+	uint8_t cancel_type;
 	bool cancel_pending;
 
 	/* Detach state */

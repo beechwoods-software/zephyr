@@ -84,4 +84,8 @@ source "drivers/clock_control/Kconfig.ra"
 
 source "drivers/clock_control/Kconfig.ambiq"
 
+source "drivers/clock_control/Kconfig.pwm"
+
+source "drivers/clock_control/Kconfig.rpi_pico"
+
 endif # CLOCK_CONTROL
